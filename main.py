@@ -18,13 +18,15 @@ CIRCLE_ID_TO_CHECK = 230947009  # ← ID Circle chính (Strategist)
 CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự động 7h sáng
 # ====================================================
 
-
 @bot.event
 async def on_ready():
-    print(f"Bot đã online: {bot.user} (ID: {bot.user.id})")
-    print("Bot đã sẵn sàng!")
+    print(f"Bot đã online: {bot.user}")
     auto_keep_awake.start()
+    
+    # Đảm bảo task 7h sáng chạy đúng giờ dù bot khởi động lúc nào
     daily_check_circle.start()
+    
+    print("Bot đã sẵn sàng! Task 7h sáng đã được kích hoạt.")
 
 
 # Task 1: Giữ Replit awake mỗi 12 phút
@@ -40,19 +42,23 @@ async def auto_keep_awake():
 
 
 # Task 2: Tự động check + gửi kênh lúc 7h sáng giờ Việt Nam
-@tasks.loop(hours=24)
+# Chạy đúng 7h00 sáng giờ Việt Nam mỗi ngày
+@tasks.loop(time=time(7, 0, tzinfo=timezone(timedelta(hours=7))))
 async def daily_check_circle():
-    vn_time = datetime.now(timezone(timedelta(hours=7)))
-    if vn_time.hour != 11 or vn_time.minute > 10:  # Chỉ chạy 1 lần trong 10 phút đầu giờ 7
-        return
-
     channel = bot.get_channel(CHANNEL_ID_TO_SEND)
     if not channel:
-        print("Không tìm thấy kênh tự động!")
+        print("[7h sáng] Không tìm thấy kênh tự động!")
         return
 
-    await channel.send("Đang tự động kiểm tra Circle lúc **7h sáng**...")
+    await channel.send("Đang tự động kiểm tra + lưu KPI Circle lúc **7h sáng**...")
+
+    # Lưu KPI hôm qua trước
+    await save_yesterday_kpi_for_circle(CIRCLE_ID_TO_CHECK)
+
+    # Sau đó gửi báo cáo chích điện
     await run_check_and_send(CIRCLE_ID_TO_CHECK, channel)
+
+    print(f"[7h sáng] Đã gửi báo cáo tự động thành công – {datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y %H:%M')}")
 
 
 # Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
