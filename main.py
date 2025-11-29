@@ -2,7 +2,6 @@
 from discord.ext import commands, tasks
 import requests
 from datetime import datetime, timezone, timedelta, time
-from flask import Flask
 from threading import Thread
 import asyncio
 
@@ -233,24 +232,7 @@ async def kpi_chich_dien(ctx, circle_id: int = None):
 
 
 # Keep alive dự phòng
-app = Flask('')
 
-
-@app.route('/')
-def home():
-    return "Bot 24/7 + Auto 7h sáng đã bật!"
-
-
-def run_flask():
-    app.run(host='0.0.0.0', port=8080)
-
-
-def keep_alive():
-    t = Thread(target=run_flask)
-    t.start()
-
-
-keep_alive()
 
 import json
 from pathlib import Path
