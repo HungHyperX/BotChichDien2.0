@@ -428,6 +428,26 @@ async def beg_command(ctx, day: int = None):
         await ctx.message.add_reaction("")
 
 
+from flask import Flask
 import os
+import threading
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+# Tạo Flask app giả để Render happy (chỉ cần endpoint /ping)
+app = Flask(__name__)
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "Bot awake!", 200
+
+# Chạy Flask trên port Render (env var PORT)
+def run_flask():
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# Chạy Flask trong thread riêng, không block bot
+if __name__ == '__main__':
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    bot.run(os.getenv('DISCORD_TOKEN'))
+
+#bot.run(os.getenv("DISCORD_TOKEN"))
