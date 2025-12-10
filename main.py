@@ -33,9 +33,9 @@ async def on_ready():
 @tasks.loop(minutes=5)
 async def auto_keep_awake():
     try:
-        requests.get("https://uma.moe/api/circles?circle_id=1", timeout=10)
+        requests.get("https://google.com", timeout=10)
         print(
-            f"[{datetime.now().strftime('%H:%M:%S')}] Auto ping – Replit awake!"
+            f"[{datetime.now().strftime('%H:%M:%S')}] Auto ping – Awake!"
         )
     except:
         pass
