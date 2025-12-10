@@ -11,7 +11,7 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
-API_URL = "https://uma.moe/api/circles?circle_id={}"
+API_URL = "https://uma.moe/api/v4/circles?circle_id={}"
 
 # THAY 2 DÒNG NÀY BẰNG CỦA BẠN
 CIRCLE_ID_TO_CHECK = 230947009  # ← ID Circle chính (Strategist)
@@ -21,7 +21,7 @@ CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự �
 @bot.event
 async def on_ready():
     print(f"Bot đã online: {bot.user}")
-    auto_keep_awake.start()
+    #auto_keep_awake.start()
     
     # Đảm bảo task 7h sáng chạy đúng giờ dù bot khởi động lúc nào
     daily_check_circle.start()
