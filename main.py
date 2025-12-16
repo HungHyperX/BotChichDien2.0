@@ -26,6 +26,18 @@ async def on_ready():
 
     print("Bot đã sẵn sàng! Task 7h sáng đã được kích hoạt.")
 
+@bot.command(name="supremacy")
+async def supremacy(ctx):
+    file_path = "daiwaifu.gif"  # File nằm cùng thư mục
+    
+    try:
+        with open(file_path, "rb") as f:
+            gif_file = discord.File(f, filename="supremacy.gif")
+            await ctx.send("**DAISCA SUPREMACY**", file=gif_file)
+    except FileNotFoundError:
+        await ctx.send("❌ GIF supremacy.gif chưa có trong repo! Hãy commit và redeploy.")
+    except Exception as e:
+        await ctx.send(f"Lỗi: {e}")
 
 # Task 1: Giữ Replit awake mỗi 12 phút
 #@tasks.loop(minutes=5)
@@ -425,6 +437,6 @@ def run_flask():
 if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    #bot.run(os.getenv('DISCORD_TOKEN'))
     bot.run(os.getenv('DISCORD_TOKEN'))
+   
 #bot.run(os.getenv("DISCORD_TOKEN"))
