@@ -4,6 +4,7 @@ import requests
 from datetime import datetime, timezone, timedelta, time
 from threading import Thread
 import asyncio
+import random
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
 intents.message_content = True
@@ -13,6 +14,24 @@ API_URL = "https://uma.moe/api/v4/circles?circle_id={}"
 # THAY 2 DÒNG NÀY BẰNG CỦA BẠN
 CIRCLE_ID_TO_CHECK = 230947009  # ← ID Circle chính (Strategist)
 CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự động 7h sáng
+
+TARGET_USER_ID = 1036115986467790918  # ID người bạn muốn bot phản ứng
+
+@bot.event
+async def on_message(message):
+    # Không phản ứng với chính bot
+    if message.author.bot:
+        return
+
+    # Nếu đúng user cần theo dõi
+    if message.author.id == TARGET_USER_ID:
+        try:
+            await message.reply("NÍN")
+        except Exception as e:
+            print("Reply failed:", e)
+
+    # ⚠️ BẮT BUỘC để các command (!cc, !supremacy...) vẫn hoạt động
+    await bot.process_commands(message)
 
 
 # ====================================================
@@ -414,6 +433,278 @@ async def beg_command(ctx, day: int = None):
     if day in [69, 100, 200, 300, 420, 500, 696, 777, 999]:
         await ctx.message.add_reaction("")
 
+@bot.command(name="ott_emoji")
+async def ott_emoji(ctx):
+    choices = ["✊", "✋", "✌️"]
+    bot_choice = random.choice(choices)
+
+    msg = await ctx.send("🎮 **OẲN TÙ TÌ**\nRa tay đi: ✊ ✋ ✌️")
+
+    # Bot thả reaction
+    for e in choices:
+        await msg.add_reaction(e)
+
+    def check(reaction, user):
+        return (
+            user == ctx.author and                 # đúng người chơi
+            str(reaction.emoji) in choices and     # đúng emoji
+            reaction.message.id == msg.id          # đúng message
+        )
+
+    try:
+        # CHỈ NHẬN 1 reaction đầu tiên
+        reaction, user = await bot.wait_for(
+            "reaction_add",
+            timeout=10.0,
+            check=check
+        )
+    except asyncio.TimeoutError:
+        #await msg.clear_reactions()
+        await ctx.send("⏱️ Hết giờ! Tay run quá à?")
+        return
+
+    user_choice = str(reaction.emoji)
+
+    win_map = {
+        "✊": "✌️",
+        "✋": "✊",
+        "✌️": "✋"
+    }
+
+    if user_choice == bot_choice:
+        result = "🤝 **HOÀ**"
+    elif win_map[user_choice] == bot_choice:
+        result = "🎉 **MÀY THẮNG**"
+    else:
+        result = "💀 **MÀY THUA**"
+
+    #await msg.clear_reactions()
+
+    await ctx.send(
+        f"👤 Mày: {user_choice}\n"
+        f"🤖 Bot: {bot_choice}\n\n"
+        f"{result}"
+    )
+
+import random
+import asyncio
+
+@bot.command(name="rps")
+async def rps(ctx):
+    import random, asyncio
+
+    # ========== KHÓA GAME ==========
+    if getattr(bot, "rps_playing", False):
+        await ctx.send("⛔ Đang có người chơi khác!")
+        return
+    bot.rps_playing = True
+
+    # ========== CẤU HÌNH ==========
+    EMOJIS = ["✌️", "✊", "✋"]
+    PENALTY_ORDER = ["✌️", "✊", "✋"]
+
+    def win(u, b):
+        return (u == "✌️" and b == "✋") or \
+               (u == "✊" and b == "✌️") or \
+               (u == "✋" and b == "✊")
+
+    # ========== TRẠNG THÁI ==========
+    score_user = 0
+    score_bot = 0
+    round_count = 1
+
+    penalty_target = None
+    penalty_index = 0
+
+    break_user_available = True
+    break_bot_available = True
+
+    first_penalty_decided = False   # ⭐ QUAN TRỌNG
+
+    last_messages = []
+
+    async def clear_round():
+        for m in last_messages:
+            try:
+                await m.delete()
+            except:
+                pass
+        last_messages.clear()
+
+    await ctx.send("🎮 **BẮT ĐẦU OẲN TÙ TÌ – THẮNG 3 ĐIỂM**")
+
+    # ========== GAME LOOP ==========
+    while score_user < 3 and score_bot < 3:
+        await clear_round()
+
+        forced_user = forced_bot = None
+        info = [
+            f"🎮 **LƯỢT {round_count}**",
+            f"👤 Bạn: {score_user} | 🤖 Bot: {score_bot}"
+        ]
+
+        if penalty_target == "user":
+            forced_user = PENALTY_ORDER[penalty_index]
+            info += ["⚠️ **BẠN ĐANG BỊ PHẠT**", f"👉 Bắt buộc ra: {forced_user}"]
+
+        if penalty_target == "bot":
+            forced_bot = PENALTY_ORDER[penalty_index]
+            info += ["⚠️ **BOT ĐANG BỊ PHẠT**", f"👉 Bot phải ra: {forced_bot}"]
+
+        info.append(f"🔓 Quyền phá luật bạn: {'✅' if break_user_available else '❌'}")
+        info.append(f"🔓 Quyền phá luật bot: {'✅' if break_bot_available else '❌'}")
+
+        msg = await ctx.send("\n".join(info))
+        last_messages.append(msg)
+
+        available = (
+            [forced_user] if penalty_target == "user" and not break_user_available
+            else EMOJIS
+        )
+
+        for e in available:
+            await msg.add_reaction(e)
+
+        def check(reaction, user):
+            return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in available
+
+        try:
+            reaction, _ = await bot.wait_for("reaction_add", timeout=30, check=check)
+        except asyncio.TimeoutError:
+            await ctx.send("⌛ Hết thời gian!")
+            bot.rps_playing = False
+            return
+
+        user_choice = str(reaction.emoji)
+
+        # ---------- BOT ----------
+        if penalty_target == "bot":
+            if break_bot_available:
+                bot_choice = random.choice(EMOJIS)
+                if bot_choice != forced_bot:
+                    break_bot_available = False
+            else:
+                bot_choice = forced_bot
+        else:
+            bot_choice = random.choice(EMOJIS)
+
+        last_messages.append(await ctx.send(f"🤖 Bot ra: {bot_choice}"))
+
+        # ---------- KẾT QUẢ ----------
+        if user_choice == bot_choice:
+            result = "draw"
+            last_messages.append(await ctx.send("😐 **HÒA**"))
+        elif win(user_choice, bot_choice):
+            result = "user_win"
+            last_messages.append(await ctx.send("🎉 **BẠN THẮNG**"))
+        else:
+            result = "bot_win"
+            last_messages.append(await ctx.send("💀 **BẠN THUA**"))
+
+        # ========== XỬ LÝ LUẬT ==========
+        if not first_penalty_decided:
+            if result == "user_win":
+                penalty_target = "bot"
+                penalty_index = 0
+                first_penalty_decided = True
+            elif result == "bot_win":
+                penalty_target = "user"
+                penalty_index = 0
+                first_penalty_decided = True
+
+        else:
+            if penalty_target:
+                punished = penalty_target
+
+                if (punished == "user" and result == "user_win") or \
+                   (punished == "bot" and result == "bot_win"):
+                    if punished == "user":
+                        score_user += 1
+                        penalty_target = "bot"
+                    else:
+                        score_bot += 1
+                        penalty_target = "user"
+                    penalty_index = 0
+
+                elif (punished == "user" and result == "bot_win") or \
+                     (punished == "bot" and result == "user_win"):
+                    if punished == "user" and not break_user_available:
+                        penalty_index = 0
+                    elif punished == "bot" and not break_bot_available:
+                        penalty_index = 0
+                    else:
+                        penalty_index += 1
+
+                if penalty_index >= 3:
+                    penalty_index = 0
+                    penalty_target = "bot" if punished == "user" else "user"
+
+            else:
+                if result == "user_win":
+                    score_user += 1
+                    penalty_target = "bot"
+                elif result == "bot_win":
+                    score_bot += 1
+                    penalty_target = "user"
+                penalty_index = 0
+
+        round_count += 1
+        await asyncio.sleep(1)
+
+    await clear_round()
+    await ctx.send(
+        f"🏁 **KẾT THÚC GAME**\n"
+        f"👤 {score_user} | 🤖 {score_bot}\n"
+        f"{'🎉 BẠN THẮNG!' if score_user > score_bot else '🤖 BOT THẮNG!'}"
+    )
+
+    bot.rps_playing = False
+
+@bot.command(name="rpsrule", aliases=["rpsrules", "rps_rule", "rps_rules"])
+async def rps_rule(ctx):
+    msg = (
+        "📜 **LUẬT OẲN TÙ TÌ – BẢN DỄ HIỂU**\n\n"
+
+        "🎯 **MỤC TIÊU**\n"
+        "- Ai đạt **3 điểm trước** là thắng ván chơi.\n\n"
+
+        "🔰 **LƯỢT ĐẦU TIÊN**\n"
+        "- Chơi bình thường cho đến khi có người thắng.\n"
+        "- ❌ **KHÔNG tính điểm** ở lượt này.\n"
+        "- 👉 Chỉ dùng để xác định **AI BỊ PHẠT**.\n\n"
+
+        "⚠️ **HÌNH PHẠT (QUAN TRỌNG)**\n"
+        "- Người bị phạt **BẮT BUỘC** phải ra theo thứ tự:\n"
+        "  **✌️ Kéo → ✊ Búa → ✋ Bao** (3 lượt liên tiếp).\n\n"
+
+        "🔓 **QUYỀN PHÁ LUẬT (MỖI NGƯỜI 1 LẦN / 1 VÁN)**\n"
+        "- Mỗi người (bạn & bot) có **1 lần duy nhất** được ra khác thứ tự hình phạt.\n"
+        "- Dùng rồi là **MẤT QUYỀN**.\n\n"
+
+        "💥 **NẾU ĐANG BỊ PHẠT**\n"
+        "- ❌ Thua → hình phạt **BẮT ĐẦU LẠI** từ ✌️ Kéo.\n"
+        "- ⚠️ Nếu dùng quyền phá luật mà **VẪN THUA** → hình phạt cũng reset.\n"
+        "- ⭕ Hòa → không tính gì, vẫn tiếp tục hình phạt.\n\n"
+
+        "🎉 **THẮNG TRONG KHI BỊ PHẠT**\n"
+        "- ✔️ Được **+1 điểm**.\n"
+        "- ✔️ **CHUYỂN HÌNH PHẠT** sang đối phương.\n\n"
+
+        "🔁 **HOÀN THÀNH HÌNH PHẠT (3 LƯỢT)**\n"
+        "- Nếu hết 3 lượt mà **CHƯA THUA**:\n"
+        "  👉 Hình phạt **CHUYỂN SANG ĐỐI PHƯƠNG**.\n\n"
+
+        "😐 **HÒA**\n"
+        "- Không ai được điểm.\n"
+        "- Không đổi hình phạt.\n\n"
+
+        "🏆 **CHIẾN THẮNG CUỐI CÙNG**\n"
+        "- Ai đạt **3 điểm trước** → **THẮNG GAME** 🎉\n\n"
+
+    )
+
+    await ctx.send(msg)
+
 
 from flask import Flask
 import os
@@ -437,6 +728,4 @@ def run_flask():
 if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    bot.run(os.getenv('DISCORD_TOKEN'))
-   
-#bot.run(os.getenv("DISCORD_TOKEN"))
+    #bot.run(os.getenv('DISCORD_TOKEN'))
