@@ -22,6 +22,7 @@ GAY_KEYWORDS = [
 ]
 
 GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
+gay_cooldown = {}  # {user_id: timestamp lần cuối bị detect}
 
 @bot.event
 async def on_message(message):
@@ -30,17 +31,30 @@ async def on_message(message):
 
     content_lower = message.content.lower()
     GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
-    # ====== GAY DETECT (GIỐNG !supremacy) ======
+    # ====== GAY DETECT VỚI COOLDOWN 60 GIÂY THEO USER ======
     if any(word in content_lower for word in GAY_KEYWORDS):
-        try:
-            with open(GAY_IMAGE_PATH, "rb") as f:
-                img = discord.File(f, filename="gay.jpg")
-                await message.reply(f"🚨 **GAY DETECTED** 🚨\n"
-                    f"👤 **{message.author.display_name}** đã bị trừ **2000 điểm tấn công** 💀", file=img)
-        except FileNotFoundError:
-            await message.reply("❌ gay.gif chưa có trong thư mục bot!")
-        except Exception as e:
-            print("Gay detect error:", e)
+        user_id = message.author.id
+        now = datetime.now()
+
+        # Kiểm tra cooldown của chính user này
+        last_time = gay_cooldown.get(user_id)
+        if last_time is None or (now - last_time).total_seconds() >= 300:  # Chưa bị phạt hoặc đã quá 1 phút
+            gay_cooldown[user_id] = now  # Cập nhật thời gian bị phạt mới
+
+            try:
+                with open(GAY_IMAGE_PATH, "rb") as f:
+                    img = discord.File(f, filename="gay.jpg")
+                    await message.reply(
+                        f"🚨 **GAY DETECTED** 🚨\n"
+                        f"👤 **{message.author.display_name}** đã bị trừ **2000 điểm tấn công** 💀\n"
+                        ,
+                        file=img
+                    )
+            except FileNotFoundError:
+                await message.reply("❌ File gay.jpg chưa có trong thư mục bot!")
+            except Exception as e:
+                print("Gay detect error:", e)
+        # Nếu đang trong cooldown → bot im lặng, không phản hồi gì cả
 
     # ====== PHẢN ỨNG USER ĐẶC BIỆT ======
     if message.author.id == TARGET_USER_ID:
