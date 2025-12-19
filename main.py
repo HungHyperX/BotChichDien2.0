@@ -6,6 +6,7 @@ from threading import Thread
 import asyncio
 import random
 import re
+import os
 from pymongo import MongoClient
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
