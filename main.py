@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta, time
 from threading import Thread
 import asyncio
 import random
+import re
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
 intents.message_content = True
@@ -29,7 +30,11 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    content_lower = message.content.lower()
+    #content_lower = message.content.lower()
+    # Loại bỏ tất cả custom emoji (cả static và animated) dạng <:name:id> hoặc <a:name:id>
+    clean_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', message.content)  # Xóa custom emoji
+    clean_text = re.sub(r':[^:\s]+:', '', clean_text)  # Xóa thêm :regional_indicator: hoặc tên emoji unicode nếu cần
+    content_lower = clean_text.lower().strip()
     GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
     # ====== GAY DETECT VỚI COOLDOWN 60 GIÂY THEO USER ======
     if any(word in content_lower for word in GAY_KEYWORDS):
