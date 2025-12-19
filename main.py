@@ -6,6 +6,7 @@ from threading import Thread
 import asyncio
 import random
 import re
+from pymongo import MongoClient
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
 intents.message_content = True
@@ -24,6 +25,52 @@ GAY_KEYWORDS = [
 
 GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
 gay_cooldown = {}  # {user_id: timestamp lần cuối bị detect}
+
+# ================== MONGODB ==================
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("MONGO_DB_NAME", "BET_BUNG")
+
+
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client[DB_NAME]
+
+users_col = mongo_db["users"]  # collection users
+
+def get_user(user_id: int):
+    return users_col.find_one({"user_id": user_id})
+
+
+def create_user(user):
+    credit = random.randint(1000, 2000)
+    doc = {
+        "user_id": user.id,
+        "username": str(user),
+        "social_credit": credit
+    }
+    users_col.insert_one(doc)
+    return credit
+
+def ensure_user(user):
+    data = get_user(user.id)
+    if not data:
+        credit = create_user(user)
+        return {
+            "user_id": user.id,
+            "social_credit": credit
+        }
+    return data
+
+
+def change_credit(user, amount: int, reason: str = ""):
+    ensure_user(user)
+
+    users_col.update_one(
+        {"user_id": user.id},
+        {"$inc": {"social_credit": amount}}
+    )
+
+    sign = "+" if amount > 0 else ""
+    return f"💳 **Social Credit**: {sign}{amount} ({reason})"
 
 @bot.event
 async def on_message(message):
@@ -55,6 +102,14 @@ async def on_message(message):
                         ,
                         file=img
                     )
+
+                    penalty_msg = change_credit(
+                        message.author,
+                        -10,
+                        "Gay detected"
+                    )
+
+                    await message.channel.send(penalty_msg)
             except FileNotFoundError:
                 await message.reply("❌ File gay.jpg chưa có trong thư mục bot!")
             except Exception as e:
@@ -81,6 +136,39 @@ async def on_ready():
     daily_check_circle.start()
 
     print("Bot đã sẵn sàng! Task 7h sáng đã được kích hoạt.")
+
+@bot.command(name="registerDB")
+async def register_db(ctx):
+    user = ctx.author
+
+    existing = get_user(user.id)
+    if existing:
+        await ctx.send(
+            f"⚠️ **{user.display_name}** đã có trong cơ sở dữ liệu rồi!\n"
+            f"💳 Social Credit hiện tại: **{existing['social_credit']}**"
+        )
+        return
+
+    credit = create_user(user)
+
+    await ctx.send(
+        f"✅ **Đăng ký thành công!**\n"
+        f"👤 Người dùng: **{user.display_name}**\n"
+        f"💳 Social Credit ban đầu: **{credit}**"
+    )
+
+@bot.command(name="credit", aliases=["sc"])
+async def social_credit(ctx):
+    user = ctx.author
+    data = get_user(user.id)
+
+    if not data:
+        await ctx.send("❌ Bạn chưa đăng ký. Dùng `!registerDB` trước.")
+        return
+
+    await ctx.send(
+        f"💳 **Social Credit của {user.display_name}:** `{data['social_credit']}`"
+    )
 
 @bot.command(name="supremacy")
 async def supremacy(ctx):
@@ -562,6 +650,15 @@ async def ott_emoji(ctx):
         f"{result}"
     )
 
+    if "THẮNG" in result:
+        msg = change_credit(ctx.author, +5, "OTT win")
+    elif "THUA" in result:
+        msg = change_credit(ctx.author, -3, "OTT lose")
+    else:
+        msg = change_credit(ctx.author, +1, "OTT draw")
+
+    await ctx.send(msg)
+
 import random
 import asyncio
 
@@ -733,6 +830,12 @@ async def rps(ctx):
         f"👤 {score_user} | 🤖 {score_bot}\n"
         f"{'🎉 BẠN THẮNG!' if score_user > score_bot else '🤖 BOT THẮNG!'}"
     )
+    if score_user > score_bot:
+        msg = change_credit(ctx.author, +20, "RPS victory")
+    else:
+        msg = change_credit(ctx.author, -15, "RPS defeat")
+
+    await ctx.send(msg)
 
     bot.rps_playing = False
 
