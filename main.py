@@ -17,20 +17,38 @@ CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự �
 
 TARGET_USER_ID = 1036115986467790918  # ID người bạn muốn bot phản ứng
 
+GAY_KEYWORDS = [
+    "gay", "đồng tính", "bê đê", "lgbt", "les", "bisexual", "queer", "femb", "36"
+]
+
+GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
+
 @bot.event
 async def on_message(message):
-    # Không phản ứng với chính bot
     if message.author.bot:
         return
 
-    # Nếu đúng user cần theo dõi
+    content_lower = message.content.lower()
+    GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
+    # ====== GAY DETECT (GIỐNG !supremacy) ======
+    if any(word in content_lower for word in GAY_KEYWORDS):
+        try:
+            with open(GAY_IMAGE_PATH, "rb") as f:
+                img = discord.File(f, filename="gay.jpg")
+                await message.reply(f"🚨 **GAY DETECTED** 🚨\n"
+                    f"👤 **{message.author.display_name}** đã bị trừ **2000 điểm tấn công** 💀", file=img)
+        except FileNotFoundError:
+            await message.reply("❌ gay.gif chưa có trong thư mục bot!")
+        except Exception as e:
+            print("Gay detect error:", e)
+
+    # ====== PHẢN ỨNG USER ĐẶC BIỆT ======
     if message.author.id == TARGET_USER_ID:
         try:
             await message.reply("NÍN")
         except Exception as e:
             print("Reply failed:", e)
 
-    # ⚠️ BẮT BUỘC để các command (!cc, !supremacy...) vẫn hoạt động
     await bot.process_commands(message)
 
 
@@ -380,35 +398,74 @@ async def save_yesterday_kpi_for_circle(circle_id: int):
         print(f"[Circle {circle_id}] Lỗi nghiêm trọng khi lưu KPI: {e}")
 
 
-# ================== HELP SIÊU LẦY LỘI ==================
+# ================== HELP SIÊU LẦY LỘI (ĐÃ CẬP NHẬT) ==================
 @bot.command(name="help", aliases=["h", "commands", "lenh"])
 async def custom_help(ctx):
     embed = discord.Embed(
-        title="Bot Chích Điện bị ngu nên hay đi ngủ gật thông cảm",
-        description="Dưới đây là danh sách lệnh tao có thể làm (khi tao tỉnh):",
-        color=0xFF6B6B)
+        title="⚡ Bot Chích Điện – Danh sách lệnh (khi bot tỉnh)",
+        description="Bot này hơi ngu hay ngủ gật, thông cảm nha 😴\nDưới đây là tất cả lệnh tao biết làm:",
+        color=0xFF6B6B
+    )
+
     embed.add_field(
-        name="`!help` hoặc `!h`",
-        value="→ Để kêu cứu khi mày lạc đường trong cái bot ngu này",
-        inline=False)
-    embed.add_field(name="`!cc` hoặc `!circle` hoặc `!checkcircle`",
-                    value="→ Chích điện mấy con vợ không đủ KPI hôm qua\n"
-                    "Ví dụ: `!cc` hoặc `!cc 123456` nếu muốn check club khác",
-                    inline=False)
+        name="📋 **Lệnh cơ bản**",
+        value=(
+            "`!help` | `!h` | `!commands` | `!lenh`\n"
+            "→ Xem cái danh sách này (đang xem nè)\n\n"
+            "`!supremacy`\n"
+            "→ **DAISCA SUPREMACY** – Thả GIF Daiwa Scarlet cực chất 🏆"
+        ),
+        inline=False
+    )
+
     embed.add_field(
-        name="`!kpiChichDien`",
-        value=
-        "→ Check xem đứa nào lười quá trời, không đủ 500k nhiều ngày liền → chuẩn bị bị cảnh cáo + chích điện thật",
-        inline=False)
+        name="🎮 **Game vui vui**",
+        value=(
+            "`!ott_emoji`\n"
+            "→ Chơi oẳn tù tì nhanh với bot (chỉ 1 lượt)\n\n"
+            "`!rps`\n"
+            "→ Chơi oẳn tù tì full luật phức tạp (thắng 3 điểm, có phạt, phá luật...)\n\n"
+            "`!rpsrule` | `!rpsrules`\n"
+            "→ Xem luật chi tiết của !rps (đọc trước khi chơi kẻo thua khóc)"
+        ),
+        inline=False
+    )
+
     embed.add_field(
-        name="`!beg + <số-ngày-beg>`",
-        value=
-        "→ Cầu xin mấy con giời thêm đền thờ cho Daiwa Scarlet a.k.a tội vơ :>",
-        inline=False)
-    embed.set_footer(
-        text="Thức tỉnh mà nghiện uma đê. Không thì bị giật điện!!!")
-    embed.set_thumbnail(
-        url="https://ibb.co/LDZ91gVV")  # icon chích điện (có thể thay link)
+        name="🌸 **Lệnh cầu xin**",
+        value=(
+            "`!beg` | `!xin` | `!cầu` + <số ngày>\n"
+            "→ Cầu xin đền thờ cho Daisca :>\n"
+            "Ví dụ: `!beg 69` (có ngày đẹp sẽ được bonus đặc biệt)"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⚡ **Lệnh KPI & Chích điện**",
+        value=(
+            "`!cc` | `!circle` | `!checkcircle` [circle_id]\n"
+            "→ Báo cáo KPI hôm qua, xem ai đủ 800k fans, ai bị chích điện ⚡\n"
+            "(Không nhập ID → check circle chính)\n\n"
+            "`!kpiChichDien` [circle_id]\n"
+            "→ Check ai lười quá trời, sắp bị cảnh cáo thật (không đủ 500k nhiều ngày)"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="🤫 **Tính năng tự động (không cần lệnh)**",
+        value=(
+            "• Gõ từ khóa **gay, đồng tính, bê đê, lgbt...** → Bot detect và phạt -2000 điểm tấn công 💀\n"
+            "• User đặc biệt (đã set ID) gửi tin nhắn → Bot tự reply **NÍN**\n"
+            "• Mỗi **7h sáng** → Bot tự động check KPI và báo cáo ở kênh chỉ định"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Thức tỉnh mà nghiện Uma đi, không thì bị giật điện thật đấy!!! ⚡")
+    embed.set_thumbnail(url="https://i.ibb.co/LDZ91gVV/lightning-icon.png")  # Thay link thumbnail nếu muốn
+
     await ctx.send(embed=embed)
 
 
