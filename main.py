@@ -73,6 +73,18 @@ def change_credit(user, amount: int, reason: str = ""):
     sign = "+" if amount > 0 else ""
     return f"💳 **Social Credit**: {sign}{amount} ({reason})"
 
+def remove_mentions(text: str) -> str:
+    # User mention <@123> hoặc <@!123>
+    text = re.sub(r'<@!?\d+>', '', text)
+
+    # Role mention <@&123>
+    text = re.sub(r'<@&\d+>', '', text)
+
+    # Channel mention <#123>
+    text = re.sub(r'<#\d+>', '', text)
+
+    return text
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -80,9 +92,23 @@ async def on_message(message):
 
     #content_lower = message.content.lower()
     # Loại bỏ tất cả custom emoji (cả static và animated) dạng <:name:id> hoặc <a:name:id>
-    clean_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', message.content)  # Xóa custom emoji
-    clean_text = re.sub(r':[^:\s]+:', '', clean_text)  # Xóa thêm :regional_indicator: hoặc tên emoji unicode nếu cần
-    content_lower = clean_text.lower().strip()
+    #clean_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', message.content)  # Xóa custom emoji
+    #clean_text = re.sub(r':[^:\s]+:', '', clean_text)  # Xóa thêm :regional_indicator: hoặc tên emoji unicode nếu cần
+    #content_lower = clean_text.lower().strip()
+
+    raw_text = message.content
+
+    # 1️⃣ Loại mention (user / role / channel)
+    no_mention_text = remove_mentions(raw_text)
+
+    # 2️⃣ Xóa custom emoji <:name:id> và <a:name:id>
+    no_emoji_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', no_mention_text)
+
+    # 3️⃣ Xóa dạng :emoji:
+    no_emoji_text = re.sub(r':[^:\s]+:', '', no_emoji_text)
+
+    content_lower = no_emoji_text.lower().strip()
+
     GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
     # ====== GAY DETECT VỚI COOLDOWN 60 GIÂY THEO USER ======
     if any(word in content_lower for word in GAY_KEYWORDS):
