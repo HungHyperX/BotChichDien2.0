@@ -21,11 +21,16 @@ CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự �
 TARGET_USER_ID = 1036115986467790918  # ID người bạn muốn bot phản ứng
 
 GAY_KEYWORDS = [
-    "gay", "đồng tính", "bê đê", "lgbt", "les", "bisexual", "queer", "femb", "36"
+    "gay", "đồng tính", "bê đê", "lgbt", "les", "bisexual", "queer", "femb"
 ]
 
 GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
 gay_cooldown = {}  # {user_id: timestamp lần cuối bị detect}
+
+GAY_WHITELIST_IDS = {
+    1085788407864770560, 1434883205344792597
+    # thêm ID khác nếu muốn
+}
 
 # ================== MONGODB ==================
 MONGO_URI = os.getenv("MONGO_URI")
@@ -111,13 +116,15 @@ async def on_message(message):
 
     GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
     # ====== GAY DETECT VỚI COOLDOWN 60 GIÂY THEO USER ======
-    if any(word in content_lower for word in GAY_KEYWORDS):
+    if (
+    	message.author.id not in GAY_WHITELIST_IDS
+    	and any(word in content_lower for word in GAY_KEYWORDS)):
         user_id = message.author.id
         now = datetime.now()
 
         # Kiểm tra cooldown của chính user này
         last_time = gay_cooldown.get(user_id)
-        if last_time is None or (now - last_time).total_seconds() >= 300:  # Chưa bị phạt hoặc đã quá 1 phút
+        if last_time is None or (now - last_time).total_seconds() >= 1800:  # Chưa bị phạt hoặc đã quá 1 phút
             gay_cooldown[user_id] = now  # Cập nhật thời gian bị phạt mới
 
             try:
@@ -548,6 +555,22 @@ async def custom_help(ctx):
             "→ Xem cái danh sách này (đang xem nè)\n\n"
             "`!supremacy`\n"
             "→ **DAISCA SUPREMACY** – Thả GIF Daiwa Scarlet cực chất 🏆"
+        ),
+        inline=False
+    )
+
+# ===== DATABASE / CREDIT =====
+    embed.add_field(
+        name="💳 **Social Credit (Database)**",
+        value=(
+            "`!registerDB`\n"
+            "→ Đăng ký vào hệ thống (chỉ cần 1 lần)\n\n"
+            "`!credit` | `!sc`\n"
+            "→ Xem Social Credit hiện tại\n\n"
+            "📌 Credit bị trừ / cộng khi:\n"
+            "• Bị detect gay\n"
+            "• Chơi game thắng / thua\n"
+            "• Một số hành vi đặc biệt khác"
         ),
         inline=False
     )
