@@ -20,6 +20,10 @@ CHANNEL_ID_TO_SEND = 1442395967369511054  # ← ID kênh nhận báo cáo tự �
 
 TARGET_USER_ID = 1036115986467790918  # ID người bạn muốn bot phản ứng
 
+SPOUSE_USER_ID = 872024401095294986
+last_message_time = {}  # {user_id: datetime}
+
+
 GAY_KEYWORDS = [
     "gay", "đồng tính", "bê đê", "lgbt", "les", "bisexual", "queer", "femb"
 ]
@@ -90,72 +94,106 @@ def remove_mentions(text: str) -> str:
 
     return text
 
+spouse_interaction_cooldown = {} 
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    #content_lower = message.content.lower()
-    # Loại bỏ tất cả custom emoji (cả static và animated) dạng <:name:id> hoặc <a:name:id>
-    #clean_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', message.content)  # Xóa custom emoji
-    #clean_text = re.sub(r':[^:\s]+:', '', clean_text)  # Xóa thêm :regional_indicator: hoặc tên emoji unicode nếu cần
-    #content_lower = clean_text.lower().strip()
+    # Lấy thời điểm hiện tại dưới dạng UTC (Timezone-aware)
+    # Thay thế cho datetime.utcnow() và datetime.now()
+    now_utc = datetime.now(timezone.utc)
 
     raw_text = message.content
-
-    # 1️⃣ Loại mention (user / role / channel)
     no_mention_text = remove_mentions(raw_text)
-
-    # 2️⃣ Xóa custom emoji <:name:id> và <a:name:id>
     no_emoji_text = re.sub(r'<a?:[a-zA-Z0-9_]+:\d+>', '', no_mention_text)
-
-    # 3️⃣ Xóa dạng :emoji:
     no_emoji_text = re.sub(r':[^:\s]+:', '', no_emoji_text)
-
     content_lower = no_emoji_text.lower().strip()
 
-    GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
-    # ====== GAY DETECT VỚI COOLDOWN 60 GIÂY THEO USER ======
-    if (
-    	message.author.id not in GAY_WHITELIST_IDS
-    	and any(word in content_lower for word in GAY_KEYWORDS)):
+    # ====== GAY DETECT ======
+    if (message.author.id not in GAY_WHITELIST_IDS and any(word in content_lower for word in GAY_KEYWORDS)):
         user_id = message.author.id
-        now = datetime.now()
-
-        # Kiểm tra cooldown của chính user này
         last_time = gay_cooldown.get(user_id)
-        if last_time is None or (now - last_time).total_seconds() >= 1800:  # Chưa bị phạt hoặc đã quá 1 phút
-            gay_cooldown[user_id] = now  # Cập nhật thời gian bị phạt mới
-
+        
+        # Sửa: Đảm bảo so sánh hai datetime cùng loại (aware)
+        if last_time is None or (now_utc - last_time).total_seconds() >= 3600:
+            gay_cooldown[user_id] = now_utc
             try:
                 with open(GAY_IMAGE_PATH, "rb") as f:
                     img = discord.File(f, filename="gay.jpg")
                     await message.reply(
                         f"🚨 **GAY DETECTED** 🚨\n"
-                        f"👤 **{message.author.display_name}** đã bị trừ **2000 điểm tấn công** 💀\n"
-                        ,
+                        f"👤 **{message.author.display_name}** đã bị trừ **2000 điểm tấn công** 💀\n",
                         file=img
                     )
-
-                    penalty_msg = change_credit(
-                        message.author,
-                        -10,
-                        "Gay detected"
-                    )
-
+                    penalty_msg = change_credit(message.author, -10, "Gay detected")
                     await message.channel.send(penalty_msg)
             except FileNotFoundError:
                 await message.reply("❌ File gay.jpg chưa có trong thư mục bot!")
             except Exception as e:
                 print("Gay detect error:", e)
-        # Nếu đang trong cooldown → bot im lặng, không phản hồi gì cả
 
-    # ====== PHẢN ỨNG USER ĐẶC BIỆT ======
+    # ====== PHẢN ỨNG USER ĐẶC BIỆT (Giữ nguyên) ======
     if message.author.id == TARGET_USER_ID:
         try:
-            await message.reply("NÍN")
+            await message.reply("NÍN CMM !!!🤫🤫🤫")
         except Exception as e:
             print("Reply failed:", e)
+    
+    # ================== THEO DÕI TIN NHẮN CỦA SPOUSE ==================
+    if message.author.id == SPOUSE_USER_ID:
+        last_message_time[SPOUSE_USER_ID] = datetime.utcnow()
+
+    # ====== LOGIC XỬ LÝ SPOUSE (ĐÃ THÊM COOLDOWN 1 NGÀY) ======
+    
+    # ================== THEO DÕI TIN NHẮN CỦA SPOUSE ==================
+    if message.author.id == SPOUSE_USER_ID:
+        last_message_time[SPOUSE_USER_ID] = now_utc
+
+    # ====== LOGIC XỬ LÝ SPOUSE (COOLDOWN 1 NGÀY & NO WARNING) ======
+    
+    def check_spouse_cooldown(user_id):
+        last_trigger = spouse_interaction_cooldown.get(user_id)
+        if last_trigger:
+            # So sánh thời gian hiện tại với thời gian lưu (cả 2 đều là UTC aware)
+            if (datetime.now(timezone.utc) - last_trigger).total_seconds() < 86400:
+                return True 
+        return False
+
+    # 1️⃣ MENTION SPOUSE
+    if SPOUSE_USER_ID in [m.id for m in message.mentions]:
+        if not check_spouse_cooldown(message.author.id):
+            try:
+                await message.reply("Gọi gì chồng bà 😡💢😏")
+                spouse_interaction_cooldown[message.author.id] = datetime.now(timezone.utc)
+            except Exception as e:
+                print("Mention reply error:", e)
+
+    # 2️⃣ REPLY SPOUSE
+    if message.reference:
+        try:
+            replied_msg = await message.channel.fetch_message(message.reference.message_id)
+            if replied_msg.author.id == SPOUSE_USER_ID:
+                if not check_spouse_cooldown(message.author.id):
+                    
+                    async def delayed_reply():
+                        await asyncio.sleep(60)
+                        last_time_active = last_message_time.get(SPOUSE_USER_ID)
+                        if not last_time_active: return
+
+                        # Sửa lỗi Warning tại đây
+                        if (datetime.now(timezone.utc) - last_time_active).total_seconds() >= 60:
+                            if not check_spouse_cooldown(message.author.id):
+                                try:
+                                    await message.reply("Chờ chồng bà chút ⏳💤 chồng đang bận 😌")
+                                    spouse_interaction_cooldown[message.author.id] = datetime.now(timezone.utc)
+                                except Exception as e:
+                                    print("Delayed reply error:", e)
+
+                    asyncio.create_task(delayed_reply())
+        except:
+            pass
 
     await bot.process_commands(message)
 
@@ -217,18 +255,6 @@ async def supremacy(ctx):
     except Exception as e:
         await ctx.send(f"Lỗi: {e}")
 
-# Task 1: Giữ Replit awake mỗi 12 phút
-#@tasks.loop(minutes=5)
-#async def auto_keep_awake():
-# try:
-# requests.get("https://google.com", timeout=10)
-# print(
-# f"[{datetime.now().strftime('%H:%M:%S')}] Auto ping – Awake!"
-# )
-#except:
-# pass
-# Task 2: Tự động check + gửi kênh lúc 7h sáng giờ Việt Nam
-# Chạy đúng 7h00 sáng giờ Việt Nam mỗi ngày
 @tasks.loop(time=time(7, 0, tzinfo=timezone(timedelta(hours=7))))
 async def daily_check_circle():
     channel = bot.get_channel(CHANNEL_ID_TO_SEND)
@@ -238,12 +264,13 @@ async def daily_check_circle():
     await channel.send(
         "Đang tự động kiểm tra + lưu KPI Circle lúc **7h sáng**...")
     # Lưu KPI hôm qua trước
-    await save_yesterday_kpi_for_circle(CIRCLE_ID_TO_CHECK)
+    #await save_yesterday_kpi_for_circle(CIRCLE_ID_TO_CHECK)
     # Sau đó gửi báo cáo chích điện
     await run_check_and_send(CIRCLE_ID_TO_CHECK, channel)
     print(
         f"[7h sáng] Đã gửi báo cáo tự động thành công – {datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y %H:%M')}"
     )
+    await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
 
 
 # Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
@@ -271,7 +298,7 @@ async def run_check_and_send(circle_id: int, destination):
             f"[DEBUG] Circle date prefix: {circle_date_prefix}, today: {today}, yesterday: {yesterday}"
         )
         # Gọi lưu KPI hôm qua trước (giữ nguyên logic cũ)
-        await save_yesterday_kpi_for_circle(circle_id)
+        #await save_yesterday_kpi_for_circle(circle_id)
         results = []
         skipped_count = 0
         for mem in members:
@@ -319,8 +346,8 @@ async def run_check_and_send(circle_id: int, destination):
             except Exception as e:
                 print(f"[DEBUG] Skip {name}: parse date error {e}")
                 continue
-            signal = "✅" if diff >= 800_000 else "⚡"
-            status = f"đã thoát được hôm nay với `{diff:,}` fans" if diff >= 800_000 else f"Chỉ cày được `{diff:,}` fans nên sẽ bị chích điện"
+            signal = "✅" if diff >= 999_000 else "⚡"
+            status = f"đã thoát được hôm nay với `{diff:,}` fans" if diff >= 999_000 else f"Chỉ cày được `{diff:,}` fans nên sẽ bị chích điện"
             results.append({
                 "signal": signal,
                 "name": name,
@@ -338,7 +365,7 @@ async def run_check_and_send(circle_id: int, destination):
         # Sắp xếp theo số fan kiếm được giảm dần
         results.sort(key=lambda x: x["diff"], reverse=True)
         msg = f"**Club {circle['name']} ({circle_id})**\n"
-        msg += f"**Báo cáo KPI ngày {yesterday.day}/{yesterday.month} → {today.day}/{today.month}** (**KPI**: 800_000 fans)\n\n"
+        msg += f"**Báo cáo KPI ngày {yesterday.day}/{yesterday.month} → {today.day}/{today.month}** (**KPI**: 1_000_000 fans)\n\n"
         for i, r in enumerate(results, 1):
             msg += f"`{i:2}.` **{r['signal']} {r['name']}**: {r['status']}\n"
         # Chia nhỏ tin nhắn nếu quá dài
@@ -360,183 +387,89 @@ async def checkcircle(ctx, circle_id: int = None):
     await ctx.send(f"Đang kiểm tra Circle `{circle_id}`...")
     await run_check_and_send(circle_id, ctx)  # Dùng lại hàm chung
 
-
-# LỆNH KIỂM TRA KPI: !checkkpi
-@bot.command(name="kpiChichDien")
-async def kpi_chich_dien(ctx, circle_id: int = None):
-    if circle_id is None:
-        circle_id = CIRCLE_ID_TO_CHECK
-    await ctx.send(f"Đang kiểm tra KPI Chích Điện của Circle `{circle_id}`...")
-    try:
-        response = requests.get(API_URL.format(circle_id), timeout=15)
-        if response.status_code != 200:
-            await ctx.send(f"Lỗi API: {response.status_code}")
-            return
-        data = response.json()
-        if not data or "circle" not in data or not data.get("members"):
-            await ctx.send("Không tìm thấy dữ liệu circle.")
-            return
-        circle = data["circle"]
-        members = data["members"]
-        # Lấy ngày hôm nay từ last_updated của circle
-        circle_updated_str = data["circle"]["last_updated"]
-        circle_updated_dt = datetime.fromisoformat(
-            circle_updated_str.replace("Z", "+00:00"))
-        today = circle_updated_dt.date()
-        msg = f"**📌 KPI Chích Điện – Club {circle['name']} ({circle_id})**\n"
-        msg += "Chỉ tiêu: **10 ngày khác nhau hoặc 5 ngày liên tiếp không đủ KPI (< 500k)**\n"
-        msg += f"Phân tích từ ngày **15** đến **{today.day - 1}**/{today.month} \n\n"
-        bad_members = []
-        for mem in members:
-            name = mem.get("trainer_name", "Unknown")
-            daily = mem.get("daily_fans", [])
-            # Không đủ dữ liệu
-            if len(daily) < today.day:
-                continue
-            # Đếm số ngày không đạt KPI
-            fail_days = 0
-            consecutive = 0
-            max_consecutive = 0
-            # I bắt đầu từ hôm qua → lùi về 1
-            for i in range(today.day - 1, 15, -1):
-                diff = daily[i] - daily[i - 1]
-                if diff < 500_000:
-                    fail_days += 1
-                    consecutive += 1
-                else:
-                    consecutive = 0
-                max_consecutive = max(max_consecutive, consecutive)
-            # Kiểm tra điều kiện
-            if fail_days >= 10 or max_consecutive >= 5:
-                bad_members.append({
-                    "name": name,
-                    "fail": fail_days,
-                    "consec": max_consecutive
-                })
-        if not bad_members:
-            await ctx.send("🎉 Không có ai vi phạm KPI chích điện!")
-            return
-        # Sort theo số lần fail
-        bad_members.sort(key=lambda x: (x["fail"], x["consec"]), reverse=True)
-        for m in bad_members:
-            msg += f"⚡ **{m['name']}** bị cảnh cáo – vì {m['fail']} ngày không đủ KPI, {m['consec']} ngày liên tiếp\n"
-        # Gửi kết quả
-        if len(msg) > 1900:
-            for part in [msg[i:i + 1900] for i in range(0, len(msg), 1900)]:
-                await ctx.send(part)
-        else:
-            await ctx.send(msg)
-    except Exception as e:
-        await ctx.send(f"Lỗi: {e}")
-        print(e)
-
-
-# Keep alive dự phòng
-import json
-from pathlib import Path
-
-
-# ================== LƯU KPI THEO CIRCLE_ID ==================
-def get_kpi_file(circle_id: int) -> Path:
-    """Trả về đường dẫn file JSON riêng cho từng circle"""
-    return Path(f"daily_kpi_circle_{circle_id}.json")
-
-
-def load_kpi_history(circle_id: int) -> dict:
-    """Đọc lịch sử KPI của circle cụ thể"""
-    file = get_kpi_file(circle_id)
-    if not file.exists():
-        return {}  # Trả về dict rỗng nếu chưa có file
-    try:
-        data = json.loads(file.read_text(encoding="utf-8"))
-        # Chuyển key ngày từ string → date (nếu cần xử lý date sau này)
-        return {
-            datetime.strptime(k, "%Y-%m-%d").date(): v
-            for k, v in data.items()
-        }
-    except Exception as e:
-        print(f"[Lưu KPI] Lỗi đọc file {file.name}: {e}")
-        return {}
-
-
-def save_kpi_history(circle_id: int, history: dict):
-    """Lưu lại lịch sử KPI (history đã có key là date object)"""
-    file = get_kpi_file(circle_id)
-    savable = {d.strftime("%Y-%m-%d"): v for d, v in history.items()}
-    file.write_text(json.dumps(savable, indent=2, ensure_ascii=False),
-                    encoding="utf-8")
-    print(f"[Lưu KPI] Đã lưu vào {file.name} – {len(history)} ngày")
-
-
-# ============================================================
-async def save_yesterday_kpi_for_circle(circle_id: int):
+@bot.command(name="kpiChichDien", aliases=["checkkpi"])
+async def kpi(ctx, arg=None):
     """
-    Lưu số fan kiếm được HÔM QUA của tất cả thành viên trong circle
-    Gọi hàm này mỗi 7h sáng (hoặc khi cần)
+    Gọi thủ công KPI ngày / tuần / tháng từ Discord
     """
+    channel = bot.get_channel(CHANNEL_ID_TO_SEND)
+
+    await ctx.send("⏳ **Đang kiểm tra KPI...**")
+
     try:
-        response = requests.get(API_URL.format(circle_id), timeout=15)
-        if response.status_code != 200:
-            print(f"[Circle {circle_id}] Lỗi API khi lưu KPI:",
-                  response.status_code)
-            return
-        data = response.json()
-        if not data or "circle" not in data or not data.get("members"):
-            print(f"[Circle {circle_id}] Không có dữ liệu circle khi lưu KPI")
-            return
-        members = data["members"]
-        circle_updated_str = data["circle"]["last_updated"]
-        circle_updated_dt = datetime.fromisoformat(
-            circle_updated_str.replace("Z", "+00:00"))
-        today = circle_updated_dt.date()
-        yesterday = today - timedelta(days=1)  # Ngày cần lưu KPI
-        history = load_kpi_history(circle_id)
-        # Nếu ngày hôm qua đã được lưu rồi thì không ghi đè (tránh lỗi khi task chạy lại)
-        if yesterday in history:
-            print(
-                f"[Circle {circle_id}] KPI ngày {yesterday} đã được lưu trước đó rồi."
-            )
-            return
-        history[yesterday] = {}
-        # Tạo dict mới cho ngày hôm qua
-        saved_count = 0
-        for mem in members:
-            name = mem.get("trainer_name", "").strip()
-            if not name:
-                continue
-            daily = mem.get("daily_fans", [])
-            if len(daily) < 2:
-                continue
-            # SỬA: Kiểm tra updated_dt.date() == yesterday (chính xác hơn cho lưu KPI)
-            updated_str = mem.get("last_updated", "")
-            if not updated_str:
-                continue
-            try:
-                updated_dt = datetime.fromisoformat(
-                    updated_str.replace("Z", "+00:00"))
-                if updated_dt.date() != yesterday:
-                    continue
-                idx = yesterday.day - 1  # index của hôm qua
-                if idx <= 0 or idx >= len(daily):
-                    continue
-                fans_yesterday = daily[idx] - (daily[idx -
-                                                     1] if idx > 0 else 0)
-                history[yesterday][name] = fans_yesterday
-                saved_count += 1
-            except:
-                continue
-        # Chỉ lưu khi thực sự có dữ liệu mới
-        if saved_count > 0:
-            save_kpi_history(circle_id, history)
-            print(
-                f"[Circle {circle_id}] Đã lưu KPI ngày {yesterday.strftime('%d/%m/%Y')} cho {saved_count} thành viên"
-            )
-        else:
-            print(
-                f"[Circle {circle_id}] Không có thành viên nào cập nhật hôm qua → không lưu"
-            )
+        await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
     except Exception as e:
-        print(f"[Circle {circle_id}] Lỗi nghiêm trọng khi lưu KPI: {e}")
+        await ctx.send("❌ Lỗi khi kiểm tra KPI")
+        print("KPI ERROR:", e)
+
+async def check_kpi_day_week_month(circle_id: int, channel):
+    await channel.send("helo")
+    
+    response = requests.get(API_URL.format(circle_id), timeout=15)
+    data = response.json()
+
+    circle = data["circle"]
+    members = data["members"]
+
+    circle_updated_dt = datetime.fromisoformat(
+        circle["last_updated"].replace("Z", "+00:00")
+    )
+    today = circle_updated_dt.date()
+    day_index = today.day - 1  # index hôm nay (0-based)
+
+    report_day = []
+    report_week = []
+    report_month = []
+
+    for mem in members:
+        name = mem.get("trainer_name", "Unknown")
+        daily = mem.get("daily_fans", [])
+
+        if len(daily) <= day_index:
+            continue
+
+        # ===== KPI NGÀY =====
+        today_fan = daily[day_index]
+        yesterday_fan = daily[day_index - 1] if day_index > 0 else 0
+        diff_day = today_fan - yesterday_fan
+
+        report_day.append(
+            f"{'✅' if diff_day >= 1_000_000 else '⚡'} **{name}**: `{diff_day:,}`"
+        )
+
+        # ===== KPI TUẦN =====
+        if len(daily) >= 7:
+            week_fans = daily[day_index] - daily[day_index - 7]
+            report_week.append(
+                f"{'✅' if week_fans >= 6_000_000 else '⚡'} **{name}**: `{week_fans:,}`"
+            )
+
+        # ===== KPI THÁNG =====
+        month_fans = daily[day_index] - daily[0]
+        report_month.append(
+            f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`"
+        )
+
+    # ===== GỬI NGÀY =====
+    # await channel.send(
+    #    f"📊 **KPI NGÀY ({today.strftime('%d/%m')}) – 1m fan/người**\n" +
+    #    "\n".join(report_day)
+    #)
+
+    # ===== GỬI TUẦN =====
+    if len(daily) % 7 == 0:
+        await channel.send(
+            f"📍 **KPI TUẦN – 6m fan/người**\n" +
+            "\n".join(report_week)
+        )
+
+    # ===== GỬI THÁNG =====
+    next_day = today + timedelta(days=1)
+    if next_day.month != today.month:
+        await channel.send(
+            f"📍 **KPI THÁNG ({today.month}) – 30m fan/người**\n" +
+            "\n".join(report_month)
+        )
 
 
 # ================== HELP SIÊU LẦY LỘI (ĐÃ CẬP NHẬT) ==================
@@ -602,7 +535,7 @@ async def custom_help(ctx):
         name="⚡ **Lệnh KPI & Chích điện**",
         value=(
             "`!cc` | `!circle` | `!checkcircle` [circle_id]\n"
-            "→ Báo cáo KPI hôm qua, xem ai đủ 800k fans, ai bị chích điện ⚡\n"
+            "→ Báo cáo KPI hôm qua, xem ai đủ 1M fans, ai bị chích điện ⚡\n"
             "(Không nhập ID → check circle chính)\n\n"
             "`!kpiChichDien` [circle_id]\n"
             "→ Check ai lười quá trời, sắp bị cảnh cáo thật (không đủ 500k nhiều ngày)"
@@ -957,4 +890,5 @@ def run_flask():
 if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
+
     bot.run(os.getenv('DISCORD_TOKEN'))
