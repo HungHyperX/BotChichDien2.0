@@ -35,7 +35,7 @@ GAY_IMAGE_PATH = "gay.jpg"  # hoặc .png / .gif
 gay_cooldown = {}  # {user_id: timestamp lần cuối bị detect}
 
 GAY_WHITELIST_IDS = {
-    1085788407864770560, 1434883205344792597
+    1085788407864770560, 1434883205344792597, 872024401095294986, 1239908958123331664
     # thêm ID khác nếu muốn
 }
 
