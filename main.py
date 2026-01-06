@@ -23,6 +23,9 @@ TARGET_USER_ID = 1036115986467790918  # ID người bạn muốn bot phản ứn
 SPOUSE_USER_ID = 872024401095294986
 last_message_time = {}  # {user_id: datetime}
 
+BET_ADMIN_ID = 708552026539163723  # người được phép tạo & chốt kèo
+
+active_bet = None
 
 GAY_KEYWORDS = [
     "gay", "đồng tính", "bê đê", "lgbt", "les", "bisexual", "queer", "femb"
@@ -196,6 +199,129 @@ async def on_message(message):
             pass
 
     await bot.process_commands(message)
+
+@bot.group(name="bet", invoke_without_command=True)
+async def bet(ctx):
+    await ctx.send(
+        "📌 **LỆNH BET**\n"
+        "`!bet create <title> | <opt1> | <opt2> ...`\n"
+        "`!bet join <số_option> <credit>`\n"
+        "`!bet end <số_option_thắng>`"
+    )
+
+
+@bet.command(name="create")
+async def bet_create(ctx, *, raw: str):
+    global active_bet
+
+    if ctx.author.id != BET_ADMIN_ID:
+        await ctx.send("⛔ Mày không có quyền tạo kèo.")
+        return
+
+    if active_bet and active_bet["open"]:
+        await ctx.send("⚠️ Đang có kèo khác rồi!")
+        return
+
+    parts = [p.strip() for p in raw.split("|")]
+    if len(parts) < 3:
+        await ctx.send("❌ Cần ít nhất 2 lựa chọn.")
+        return
+
+    title = parts[0]
+    options = {}
+
+    for i, opt in enumerate(parts[1:], start=1):
+        options[i] = {"text": opt, "total": 0, "bets": {}}
+
+    active_bet = {
+        "creator_id": ctx.author.id,
+        "title": title,
+        "options": options,
+        "total_pool": 0,
+        "open": True
+    }
+
+    msg = f"🎲 **KÈO BET MỚI** 🎲\n📌 {title}\n\n"
+    for i, o in options.items():
+        msg += f"`{i}`️⃣ {o['text']}\n"
+    msg += "\n👉 Tham gia: `!bet join <số> <credit>`"
+
+    await ctx.send(msg)
+
+@bet.command(name="join")
+async def bet_join(ctx, option: int, amount: int):
+    global active_bet
+
+    if not active_bet or not active_bet["open"]:
+        await ctx.send("❌ Hiện không có kèo nào.")
+        return
+
+    if option not in active_bet["options"]:
+        await ctx.send("❌ Lựa chọn không tồn tại.")
+        return
+
+    if amount <= 0:
+        await ctx.send("❌ Số credit phải > 0.")
+        return
+
+    user_data = ensure_user(ctx.author)
+    if user_data["social_credit"] < amount:
+        await ctx.send("❌ Không đủ Social Credit.")
+        return
+
+    # Trừ tiền
+    change_credit(ctx.author, -amount, "Bet tham gia")
+
+    opt = active_bet["options"][option]
+    opt["total"] += amount
+    opt["bets"][ctx.author.id] = opt["bets"].get(ctx.author.id, 0) + amount
+    active_bet["total_pool"] += amount
+
+    await ctx.send(
+        f"✅ **{ctx.author.display_name}** đã bet `{amount}` SC vào "
+        f"**{opt['text']}**"
+    )
+
+@bet.command(name="end")
+async def bet_end(ctx, winning_option: int):
+    global active_bet
+
+    if ctx.author.id != BET_ADMIN_ID:
+        await ctx.send("⛔ Mày không có quyền chốt kèo.")
+        return
+
+    if not active_bet or not active_bet["open"]:
+        await ctx.send("❌ Không có kèo đang mở.")
+        return
+
+    if winning_option not in active_bet["options"]:
+        await ctx.send("❌ Lựa chọn thắng không tồn tại.")
+        return
+
+    active_bet["open"] = False
+
+    win_opt = active_bet["options"][winning_option]
+    total_win = win_opt["total"]
+    pool = active_bet["total_pool"]
+
+    msg = f"🏁 **KẾT QUẢ BET** 🏁\n"
+    msg += f"🎯 Kèo: {active_bet['title']}\n"
+    msg += f"🏆 Kết quả: **{win_opt['text']}**\n\n"
+
+    if total_win == 0:
+        msg += "💀 Không ai bet cửa thắng."
+        await ctx.send(msg)
+        active_bet = None
+        return
+
+    for uid, bet_amt in win_opt["bets"].items():
+        user = ctx.guild.get_member(uid)
+        win_amount = int(pool * (bet_amt / total_win))
+        change_credit(user, win_amount, "Bet thắng")
+        msg += f"🎉 **{user.display_name}** nhận `{win_amount}` SC\n"
+
+    await ctx.send(msg)
+    active_bet = None
 
 
 # ====================================================
