@@ -260,8 +260,9 @@ async def bet_join(ctx, option: int, amount: int):
         await ctx.send("❌ Lựa chọn không tồn tại.")
         return
 
-    if amount <= 0:
-        await ctx.send("❌ Số credit phải > 0.")
+    # 🔒 GIỚI HẠN BET
+    if amount < 10 or amount > 100:
+        await ctx.send("❌ Chỉ được bet từ **10 đến 100** Social Credit.")
         return
 
     user_data = ensure_user(ctx.author)
@@ -269,18 +270,24 @@ async def bet_join(ctx, option: int, amount: int):
         await ctx.send("❌ Không đủ Social Credit.")
         return
 
+    # ❌ Không cho bet nhiều cửa
+    for opt in active_bet["options"].values():
+        if ctx.author.id in opt["bets"]:
+            await ctx.send("⚠️ Mỗi người chỉ được bet **1 cửa**.")
+            return
+
     # Trừ tiền
     change_credit(ctx.author, -amount, "Bet tham gia")
 
     opt = active_bet["options"][option]
     opt["total"] += amount
-    opt["bets"][ctx.author.id] = opt["bets"].get(ctx.author.id, 0) + amount
+    opt["bets"][ctx.author.id] = amount
     active_bet["total_pool"] += amount
 
     await ctx.send(
-        f"✅ **{ctx.author.display_name}** đã bet `{amount}` SC vào "
-        f"**{opt['text']}**"
+        f"✅ **{ctx.author.display_name}** đã bet `{amount}` SC vào **{opt['text']}**"
     )
+
 
 @bet.command(name="end")
 async def bet_end(ctx, winning_option: int):
@@ -314,11 +321,14 @@ async def bet_end(ctx, winning_option: int):
         active_bet = None
         return
 
+    WIN_RATE = 1.5
+
     for uid, bet_amt in win_opt["bets"].items():
         user = ctx.guild.get_member(uid)
-        win_amount = int(pool * (bet_amt / total_win))
-        change_credit(user, win_amount, "Bet thắng")
-        msg += f"🎉 **{user.display_name}** nhận `{win_amount}` SC\n"
+        win_amount = int(bet_amt * WIN_RATE)
+        change_credit(user, win_amount, "Bet thắng x1.5")
+        msg += f"🎉 **{user.display_name}** thắng `{win_amount}` SC (x1.5)\n"
+
 
     await ctx.send(msg)
     active_bet = None
