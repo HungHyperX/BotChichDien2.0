@@ -25,6 +25,8 @@ last_message_time = {}  # {user_id: datetime}
 
 BET_ADMIN_ID = 708552026539163723  # người được phép tạo & chốt kèo
 
+SOURCE_BOT_ID = 1400050839544008804  # 🔁 thay bằng ID bot bạn cung cấp
+
 active_bet = None
 
 GAY_KEYWORDS = [
@@ -42,7 +44,6 @@ GAY_WHITELIST_IDS = {
 # ================== MONGODB ==================
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME", "BET_BUNG")
-
 
 mongo_client = MongoClient(MONGO_URI)
 mongo_db = mongo_client[DB_NAME]
@@ -99,9 +100,68 @@ def remove_mentions(text: str) -> str:
 
 spouse_interaction_cooldown = {} 
 
+CORRECT_REGEX = re.compile(
+    r"Correct\s+(?:<@!?(\d+)>|@(.+?))!"
+    r".*?\(\+(\d+)\s+points\)"
+    r".*?Current Streak:\s*\**(\d+)\**",
+    re.IGNORECASE | re.DOTALL
+)
+
 @bot.event
 async def on_message(message):
-    if message.author.bot:
+
+    if message.author.id == 1400050839544008804:
+        match = CORRECT_REGEX.search(message.content)
+        if match:
+            # Lấy thông tin từ regex
+            user_id_str = match.group(1) # Nếu là mention <@ID>
+            user_name_str = match.group(2) # Nếu là text @Name
+            base_points = 0# int(match.group(3))
+            streak = int(match.group(4))
+
+            guild = message.guild
+            if not guild: return
+
+            member = None
+            
+            # Trường hợp 1: Bot tag trực tiếp (Có ID)
+            if user_id_str:
+                member = guild.get_member(int(user_id_str))
+            
+            # Trường hợp 2: Bot chỉ ghi tên (Tìm theo tên hiển thị)
+            elif user_name_str:
+                member = discord.utils.get(guild.members, display_name=user_name_str)
+
+            if not member:
+                # Nếu không tìm thấy member, có thể return hoặc log ra
+                print(f"Không tìm thấy member: {user_id_str or user_name_str}")
+                await message.channel.send(
+                    f"**Mở tài khoản đi ku!!!** Gõ !registerDB"
+                )
+                return
+
+            # 🎁 TÍNH BONUS STREAK
+            streak_bonus = (streak - 1) // 30 + 1
+            total_reward = base_points + streak_bonus
+
+            # Cộng điểm (Giả sử hàm change_credit của bạn đã hoạt động tốt)
+            change_credit(
+                member,
+                total_reward,
+                reason=f"Correct answer (+{base_points}) + streak bonus (+{streak_bonus})"
+            )
+
+            await message.channel.send(
+                #f"🔥 **{member.display_name}** đúng câu trả lời!\n"
+                #f"➕ Điểm gốc: `{base_points}`\n"
+                #f"🔥 Streak `{streak}` → thưởng `{streak_bonus}` SC\n"
+                f"🏆 **Thưởng:** `{total_reward}` Social Credit"
+            )
+            
+            # QUAN TRỌNG: Return ngay để không bị dính vào logic "if message.author.bot" ở dưới
+            return
+
+    if message.author.bot: # Ngăn cho nó k bắt bot
         return
 
     # Lấy thời điểm hiện tại dưới dạng UTC (Timezone-aware)
