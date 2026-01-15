@@ -325,8 +325,8 @@ async def bet_join(ctx, option: int, amount: int):
         return
 
     # 🔒 GIỚI HẠN BET
-    if amount < 10 or amount > 100:
-        await ctx.send("❌ Chỉ được bet từ **10 đến 100** Social Credit.")
+    if amount < 10 or amount > 200:
+        await ctx.send("❌ Chỉ được bet từ **10 đến 200** Social Credit.")
         return
 
     user_data = ensure_user(ctx.author)
@@ -696,26 +696,23 @@ async def checkcircle(ctx, circle_id: int = None):
     await run_check_and_send(circle_id, ctx)  # Dùng lại hàm chung
 
 @bot.command(name="kpiChichDien", aliases=["checkkpi"])
-async def kpi(ctx, arg=None):
-    """
-    Gọi thủ công KPI ngày / tuần / tháng từ Discord
-    """
-    channel = bot.get_channel(CHANNEL_ID_TO_SEND)
-
-    await ctx.send("⏳ **Đang kiểm tra KPI...**")
-
-    try:
-        await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
-    except Exception as e:
-        await ctx.send("❌ Lỗi khi kiểm tra KPI")
-        print("KPI ERROR:", e)
+async def kpi(ctx):
+    await ctx.send("⏳ **Đang kiểm tra KPI (thủ công)...**")
+    await check_kpi_day_week_month_manual(CIRCLE_ID_TO_CHECK, ctx.channel)
 
 async def check_kpi_day_week_month(circle_id: int, channel):
-    await channel.send("helo")
-    
-    response = requests.get(API_URL.format(circle_id), timeout=15)
-    data = response.json()
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
+    if response.status_code != 200:
+        await channel.send(f"❌ KPI API lỗi: {response.status_code}")
+        return
 
+    data = response.json()
     circle = data["circle"]
     members = data["members"]
 
@@ -745,39 +742,122 @@ async def check_kpi_day_week_month(circle_id: int, channel):
             f"{'✅' if diff_day >= 1_000_000 else '⚡'} **{name}**: `{diff_day:,}`"
         )
 
-        # ===== KPI TUẦN =====
-        if len(daily) >= 7:
-            week_fans = daily[day_index] - daily[day_index - 7]
+        # ===== KPI TUẦN (chủ nhật) =====
+        if today.weekday() == 6 and day_index >= 6:
+            week_fans = daily[day_index] - daily[day_index - 6]
             report_week.append(
                 f"{'✅' if week_fans >= 6_000_000 else '⚡'} **{name}**: `{week_fans:,}`"
             )
 
-        # ===== KPI THÁNG =====
-        month_fans = daily[day_index] - daily[0]
-        report_month.append(
-            f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`"
+        # ===== KPI THÁNG (ngày cuối tháng) =====
+        next_day = today + timedelta(days=1)
+        if next_day.month != today.month:
+            month_fans = daily[day_index] - daily[0]
+            report_month.append(
+                f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`"
+            )
+
+    # ===== GỬI BÁO CÁO =====
+    #if report_day:
+    #    await channel.send(
+    #        f"📊 **KPI NGÀY ({today.strftime('%d/%m')}) – 1M fan/người**\n"
+    #        + "\n".join(report_day)
+    #    )
+
+    if report_week:
+        await channel.send(
+            f"📍 **KPI TUẦN – 6M fan/người**\n"
+            + "\n".join(report_week)
         )
 
-    # ===== GỬI NGÀY =====
-    # await channel.send(
-    #    f"📊 **KPI NGÀY ({today.strftime('%d/%m')}) – 1m fan/người**\n" +
-    #    "\n".join(report_day)
+    if report_month:
+        await channel.send(
+            f"📍 **KPI THÁNG ({today.month}) – 30M fan/người**\n"
+            + "\n".join(report_month)
+        )
+
+async def check_kpi_day_week_month_manual(circle_id: int, channel):
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
+    if response.status_code != 200:
+        await channel.send(f"❌ KPI API lỗi: {response.status_code}")
+        return
+
+    data = response.json()
+    circle = data["circle"]
+    members = data["members"]
+
+    circle_updated_dt = datetime.fromisoformat(
+        circle["last_updated"].replace("Z", "+00:00")
+    )
+    today = circle_updated_dt.date()
+    today_index = today.day - 1
+
+    # ================== TÍNH CHỦ NHẬT GẦN NHẤT ==================
+    days_since_sunday = (today.weekday() + 1) % 7
+    last_sunday = today - timedelta(days=days_since_sunday)
+    sunday_index = last_sunday.day - 1
+
+    report_day = []
+    report_week = []
+    report_month = []
+
+    for mem in members:
+        name = mem.get("trainer_name", "Unknown")
+        daily = mem.get("daily_fans", [])
+
+        if len(daily) <= today_index:
+            continue
+
+        # ===== KPI NGÀY =====
+        today_fan = daily[today_index]
+        yesterday_fan = daily[today_index - 1] if today_index > 0 else 0
+        diff_day = today_fan - yesterday_fan
+
+        report_day.append(
+            f"{'✅' if diff_day >= 1_000_000 else '⚡'} **{name}**: `{diff_day:,}`"
+        )
+
+        # ===== KPI TUẦN (CHỦ NHẬT GẦN NHẤT) =====
+        if sunday_index >= 6 and len(daily) > sunday_index:
+            week_fans = daily[sunday_index] - daily[sunday_index - 6]
+            report_week.append(
+                f"{'✅' if week_fans >= 6_000_000 else '⚡'} **{name}**: `{week_fans:,}`"
+            )
+
+        # ===== KPI THÁNG (GIỮ NGUYÊN) =====
+        next_day = today + timedelta(days=1)
+        if next_day.month != today.month:
+            month_fans = daily[today_index] - daily[0]
+            report_month.append(
+                f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`"
+            )
+
+    # ================== GỬI BÁO CÁO ==================
+    #await channel.send(
+    #    f"📊 **KPI NGÀY ({today.strftime('%d/%m')}) – 1M fan/người**\n"
+    #    + "\n".join(report_day)
     #)
 
-    # ===== GỬI TUẦN =====
-    if len(daily) % 7 == 0:
+    if report_week:
         await channel.send(
-            f"📍 **KPI TUẦN – 6m fan/người**\n" +
-            "\n".join(report_week)
+            f"📍 **KPI TUẦN (chủ nhật gần nhất: {last_sunday.strftime('%d/%m')}) – 6M fan/người**\n"
+            + "\n".join(report_week)
+        )
+    else:
+        await channel.send("⚠️ Không đủ dữ liệu để check KPI tuần gần nhất.")
+
+    if report_month:
+        await channel.send(
+            f"📍 **KPI THÁNG ({today.month}) – 30M fan/người**\n"
+            + "\n".join(report_month)
         )
 
-    # ===== GỬI THÁNG =====
-    next_day = today + timedelta(days=1)
-    if next_day.month != today.month:
-        await channel.send(
-            f"📍 **KPI THÁNG ({today.month}) – 30m fan/người**\n" +
-            "\n".join(report_month)
-        )
 
 
 # ================== HELP SIÊU LẦY LỘI (ĐÃ CẬP NHẬT) ==================
