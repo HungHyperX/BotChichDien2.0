@@ -583,121 +583,158 @@ async def daily_check_circle():
     await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
 
 
-# Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
+import aiohttp
+from datetime import datetime, timedelta, timezone
+
+# Hàm chung để xử lý check circle (đã FIX API 403)
 async def run_check_and_send(circle_id: int, destination):
     try:
         HEADERS = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "UmaKPIBot/1.0 (Discord Bot)",
             "Accept": "application/json"
         }
 
-        response = requests.get(
-            API_URL.format(circle_id),
-            headers=HEADERS,
-            timeout=15
-        )
-        if response.status_code != 200:
-            await destination.send(f"Lỗi API: {response.status_code}")
-            return
-        data = response.json()
+        timeout = aiohttp.ClientTimeout(total=20)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(
+                API_URL.format(circle_id),
+                headers=HEADERS
+            ) as response:
+
+                if response.status != 200:
+                    text = await response.text()
+                    await destination.send(
+                        f"❌ Lỗi API: {response.status}\n```{text[:300]}```"
+                    )
+                    return
+
+                data = await response.json()
+
         if not data or "circle" not in data or not data.get("members"):
             await destination.send("Không tìm thấy dữ liệu circle.")
             return
+
         circle = data["circle"]
         members = data["members"]
-        # Lấy thời gian cập nhật của circle (10 ký tự đầu: YYYY-MM-DD)
+
+        # ===== TIME PARSE =====
         circle_updated_str = circle["last_updated"]
-        circle_date_prefix = circle_updated_str[:10]  # ví dụ: "2025-12-11"
-        # Lấy ngày hôm nay từ circle (đã chuẩn)
         circle_updated_dt = datetime.fromisoformat(
-            circle_updated_str.replace("Z", "+00:00"))
+            circle_updated_str.replace("Z", "+00:00")
+        )
         today = circle_updated_dt.date()
         yesterday = today - timedelta(days=1)
+
+        circle_date_prefix = circle_updated_str[:10]
+
         print(
-            f"[DEBUG] Circle date prefix: {circle_date_prefix}, today: {today}, yesterday: {yesterday}"
+            f"[DEBUG] Circle date: {circle_date_prefix}, today: {today}, yesterday: {yesterday}"
         )
-        # Gọi lưu KPI hôm qua trước (giữ nguyên logic cũ)
-        #await save_yesterday_kpi_for_circle(circle_id)
+
         results = []
         skipped_count = 0
+
         for mem in members:
             name = mem.get("trainer_name", "Unknown").strip()
             if not name:
                 continue
+
             updated_str = mem.get("last_updated", "")
             if not updated_str:
                 print(f"[DEBUG] Skip {name}: no last_updated")
                 continue
-            # SỬA: LẤY NHỮNG THÀNH VIÊN CÓ CÙNG NGÀY CẬP NHẬT VỚI CIRCLE HOẶC HÔM QUA (LINH HOẠT HƠN)
+
             mem_date_prefix = updated_str[:10]
-            if mem_date_prefix not in (circle_date_prefix,
-                                       yesterday.strftime("%Y-%m-%d")):
-                print(
-                    f"[DEBUG] Skip {name}: prefix '{mem_date_prefix}' != '{circle_date_prefix}' or yesterday"
-                )
+            if mem_date_prefix not in (
+                circle_date_prefix,
+                yesterday.strftime("%Y-%m-%d"),
+            ):
                 skipped_count += 1
-                continue  # Bỏ qua nếu không cùng ngày hoặc hôm qua
+                continue
+
             daily = mem.get("daily_fans", [])
-            if len(daily) < today.day:  # Chưa đủ dữ liệu đến hôm nay
+            if len(daily) < today.day:
                 print(
                     f"[DEBUG] Skip {name}: daily_fans len {len(daily)} < {today.day}"
                 )
                 continue
-            # SỬA: Tính index dựa trên ngày của member (chính xác hơn)
+
             try:
                 updated_dt = datetime.fromisoformat(
-                    updated_str.replace("Z", "+00:00"))
-                mem_date = updated_dt.date()
-                idx_today = mem_date.day - 1  # index của ngày cập nhật (0-based)
-                idx_yesterday = idx_today - 1  # index của hôm trước
-                if idx_today >= len(daily) or idx_yesterday < 0:
-                    print(
-                        f"[DEBUG] Skip {name}: invalid index {idx_today}/{idx_yesterday} for len {len(daily)}"
-                    )
-                    continue
-                fans_today = daily[idx_today]
-                fans_yesterday = daily[
-                    idx_yesterday] if idx_yesterday >= 0 else 0
-                diff = fans_today - fans_yesterday
-                print(
-                    f"[DEBUG] {name}: diff = {diff:,} (today {fans_today:,} - yest {fans_yesterday:,})"
+                    updated_str.replace("Z", "+00:00")
                 )
+                mem_date = updated_dt.date()
+
+                idx_today = mem_date.day - 1
+                idx_yesterday = idx_today - 1
+
+                if idx_today >= len(daily) or idx_yesterday < 0:
+                    continue
+
+                fans_today = daily[idx_today]
+                fans_yesterday = daily[idx_yesterday]
+
+                diff = fans_today - fans_yesterday
+
+                print(
+                    f"[DEBUG] {name}: +{diff:,} fans ({fans_today:,} - {fans_yesterday:,})"
+                )
+
             except Exception as e:
-                print(f"[DEBUG] Skip {name}: parse date error {e}")
+                print(f"[DEBUG] Skip {name}: date parse error {e}")
                 continue
+
             signal = "✅" if diff >= 999_000 else "⚡"
-            status = f"đã thoát được hôm nay với `{diff:,}` fans" if diff >= 999_000 else f"Chỉ cày được `{diff:,}` fans nên sẽ bị chích điện"
-            results.append({
-                "signal": signal,
-                "name": name,
-                "diff": diff,
-                "status": status
-            })
+            status = (
+                f"đã thoát được hôm nay với `{diff:,}` fans"
+                if diff >= 999_000
+                else f"Chỉ cày được `{diff:,}` fans nên sẽ bị chích điện"
+            )
+
+            results.append(
+                {
+                    "signal": signal,
+                    "name": name,
+                    "diff": diff,
+                    "status": status,
+                }
+            )
+
         print(
             f"[DEBUG] Total results: {len(results)}, skipped: {skipped_count}/{len(members)}"
         )
+
         if not results:
             await destination.send(
-                f"Không có thành viên nào được cập nhật hôm nay hoặc dữ liệu chưa đầy đủ. (Debug: {skipped_count}/{len(members)} skipped do date mismatch)"
+                f"Không có thành viên nào được cập nhật hôm nay. (Skipped {skipped_count}/{len(members)})"
             )
             return
-        # Sắp xếp theo số fan kiếm được giảm dần
+
+        # ===== SORT & SEND =====
         results.sort(key=lambda x: x["diff"], reverse=True)
-        msg = f"**Club {circle['name']} ({circle_id})**\n"
-        msg += f"**Báo cáo KPI ngày {yesterday.day}/{yesterday.month} → {today.day}/{today.month}** (**KPI**: 1_000_000 fans)\n\n"
+
+        msg = (
+            f"**Club {circle['name']} ({circle_id})**\n"
+            f"**Báo cáo KPI ngày {yesterday.day}/{yesterday.month} → "
+            f"{today.day}/{today.month}** (**KPI**: 1_000_000 fans)\n\n"
+        )
+
         for i, r in enumerate(results, 1):
             msg += f"`{i:2}.` **{r['signal']} {r['name']}**: {r['status']}\n"
-        # Chia nhỏ tin nhắn nếu quá dài
+
         if len(msg) > 1950:
-            for part in [msg[i:i + 1950] for i in range(0, len(msg), 1950)]:
+            for part in (
+                msg[i : i + 1950] for i in range(0, len(msg), 1950)
+            ):
                 await destination.send(part)
         else:
             await destination.send(msg)
+
     except Exception as e:
-        await destination.send(f"Lỗi nghiêm trọng: {e}")
+        await destination.send(f"🚨 Lỗi nghiêm trọng: {e}")
         print(f"[run_check_and_send] Exception: {e}")
+
 
 
 # LỆNH THỦ CÔNG: !cc hoặc !circle (có thể bỏ trống ID → dùng ID mặc định)
