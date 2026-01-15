@@ -266,10 +266,10 @@ async def bet(ctx):
         "📌 **LỆNH BET**\n"
         "`**Tạo bet:** !bet create <title> | <opt1> | <opt2> ...`\n"
         "`**Đặt bet:**!bet join <số_option> <credit>`\n"
-        "`**Dừng bet:** !bet stop`"
-        "`**Kết thúc bet:** !bet end <số_option_thắng>`"
-        "`**Xem bet:** !bet info`"
-        "`**Bể bet:** !bet refund`"
+        "`**Dừng bet:** !bet stop\n`"
+        "`**Kết thúc bet:** !bet end <số_option_thắng>\n`"
+        "`**Xem bet:** !bet info\n`"
+        "`**Bể bet:** !bet refund\n`"
     )
 
 
@@ -301,7 +301,8 @@ async def bet_create(ctx, *, raw: str):
         "title": title,
         "options": options,
         "total_pool": 0,
-        "open": True
+        "open": True,
+        "ended": False     # 🏁 đã end hay chưa
     }
 
     msg = f"🎲 **KÈO BET MỚI** 🎲\n📌 {title}\n\n"
@@ -359,7 +360,7 @@ async def bet_refund(ctx):
         await ctx.send("⛔ Mày không có quyền refund kèo.")
         return
 
-    if not active_bet:
+    if not active_bet or active_bet["ended"]:
         await ctx.send("❌ Không có kèo nào để refund.")
         return
 
@@ -402,8 +403,10 @@ async def bet_info(ctx):
         await ctx.send("❌ Hiện không có kèo nào.")
         return
 
-    status = "🟢 ĐANG MỞ" if active_bet["open"] else "🛑 ĐÃ DỪNG"
-
+    #status = "🟢 ĐANG MỞ" if active_bet["open"] else "🛑 ĐÃ DỪNG"
+    status = "🔓 Đang mở bet" if active_bet["open"] else "🔒 Đã khóa bet"
+    if active_bet["ended"]:
+        status = "🏁 Đã kết thúc"
     msg = (
         f"🎲 **THÔNG TIN KÈO BET** 🎲\n"
         f"📌 **Kèo:** {active_bet['title']}\n"
@@ -427,15 +430,15 @@ async def bet_stop(ctx):
     global active_bet
 
     if ctx.author.id != BET_ADMIN_ID:
-        await ctx.send("⛔ Mày không có quyền dừng kèo.")
+        await ctx.send("⛔ Mày không có quyền stop kèo.")
         return
 
     if not active_bet:
-        await ctx.send("❌ Không có kèo nào đang chạy.")
+        await ctx.send("❌ Không có kèo nào.")
         return
 
     if not active_bet["open"]:
-        await ctx.send("⚠️ Kèo đã bị dừng rồi.")
+        await ctx.send("⚠️ Kèo đã bị stop rồi.")
         return
 
     active_bet["open"] = False
@@ -455,15 +458,15 @@ async def bet_end(ctx, winning_option: int):
         await ctx.send("⛔ Mày không có quyền chốt kèo.")
         return
 
-    if not active_bet or not active_bet["open"]:
+    if not active_bet or not active_bet["ended"]:
         await ctx.send("❌ Không có kèo đang mở.")
         return
 
     if winning_option not in active_bet["options"]:
         await ctx.send("❌ Lựa chọn thắng không tồn tại.")
         return
-
-    active_bet["open"] = False
+    active_bet["ended"] = True
+    #active_bet["open"] = False
 
     win_opt = active_bet["options"][winning_option]
     total_win = win_opt["total"]
