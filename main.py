@@ -264,9 +264,12 @@ async def on_message(message):
 async def bet(ctx):
     await ctx.send(
         "📌 **LỆNH BET**\n"
-        "`!bet create <title> | <opt1> | <opt2> ...`\n"
-        "`!bet join <số_option> <credit>`\n"
-        "`!bet end <số_option_thắng>`"
+        "`**Tạo bet:** !bet create <title> | <opt1> | <opt2> ...`\n"
+        "`**Đặt bet:**!bet join <số_option> <credit>`\n"
+        "`**Dừng bet:** !bet stop`"
+        "`**Kết thúc bet:** !bet end <số_option_thắng>`"
+        "`**Xem bet:** !bet info`"
+        "`**Bể bet:** !bet refund`"
     )
 
 
@@ -348,6 +351,101 @@ async def bet_join(ctx, option: int, amount: int):
         f"✅ **{ctx.author.display_name}** đã bet `{amount}` SC vào **{opt['text']}**"
     )
 
+@bet.command(name="refund")
+async def bet_refund(ctx):
+    global active_bet
+
+    if ctx.author.id != BET_ADMIN_ID:
+        await ctx.send("⛔ Mày không có quyền refund kèo.")
+        return
+
+    if not active_bet:
+        await ctx.send("❌ Không có kèo nào để refund.")
+        return
+
+    refunded_users = {}
+    total_refund = 0
+
+    for opt in active_bet["options"].values():
+        for user_id, amount in opt["bets"].items():
+            refunded_users[user_id] = refunded_users.get(user_id, 0) + amount
+            total_refund += amount
+
+    if not refunded_users:
+        await ctx.send("⚠️ Kèo chưa có ai bet → không cần refund.")
+        active_bet = None
+        return
+
+    # Hoàn tiền
+    msg = "🔄 **REFUND KÈO BET** 🔄\n\n"
+    for uid, amt in refunded_users.items():
+        member = ctx.guild.get_member(uid)
+        if not member:
+            continue
+        change_credit(member, amt, "Refund bet")
+        msg += f"💸 **{member.display_name}** được hoàn `{amt}` SC\n"
+
+    msg += f"\n💰 **Tổng hoàn:** `{total_refund}` SC"
+    msg += "\n🧹 Kèo đã bị hủy & reset."
+
+    await ctx.send(msg)
+
+    # ❌ Reset kèo
+    active_bet = None
+
+
+@bet.command(name="info")
+async def bet_info(ctx):
+    global active_bet
+
+    if not active_bet:
+        await ctx.send("❌ Hiện không có kèo nào.")
+        return
+
+    status = "🟢 ĐANG MỞ" if active_bet["open"] else "🛑 ĐÃ DỪNG"
+
+    msg = (
+        f"🎲 **THÔNG TIN KÈO BET** 🎲\n"
+        f"📌 **Kèo:** {active_bet['title']}\n"
+        f"📊 **Trạng thái:** {status}\n"
+        f"💰 **Tổng pool:** `{active_bet['total_pool']}` SC\n\n"
+        f"📋 **LỰA CHỌN:**\n"
+    )
+
+    for i, opt in active_bet["options"].items():
+        msg += (
+            f"`{i}`️⃣ **{opt['text']}**\n"
+            f"   └ 💸 Tổng bet: `{opt['total']}` SC\n"
+            f"   └ 👥 Người chơi: `{len(opt['bets'])}`\n"
+        )
+
+    await ctx.send(msg)
+
+
+@bet.command(name="stop")
+async def bet_stop(ctx):
+    global active_bet
+
+    if ctx.author.id != BET_ADMIN_ID:
+        await ctx.send("⛔ Mày không có quyền dừng kèo.")
+        return
+
+    if not active_bet:
+        await ctx.send("❌ Không có kèo nào đang chạy.")
+        return
+
+    if not active_bet["open"]:
+        await ctx.send("⚠️ Kèo đã bị dừng rồi.")
+        return
+
+    active_bet["open"] = False
+
+    await ctx.send(
+        "🛑 **KÈO ĐÃ BỊ DỪNG**\n"
+        "❌ Không thể `!bet join` nữa\n"
+        "⏳ Chờ `!bet end` để chốt kết quả"
+    )
+
 
 @bet.command(name="end")
 async def bet_end(ctx, winning_option: int):
@@ -381,7 +479,7 @@ async def bet_end(ctx, winning_option: int):
         active_bet = None
         return
 
-    WIN_RATE = 1.5
+    WIN_RATE = 1.0
 
     for uid, bet_amt in win_opt["bets"].items():
         user = ctx.guild.get_member(uid)
@@ -472,7 +570,18 @@ async def daily_check_circle():
 # Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
 async def run_check_and_send(circle_id: int, destination):
     try:
-        response = requests.get(API_URL.format(circle_id), timeout=15)
+        HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json"
+        }
+
+        response = requests.get(
+            API_URL.format(circle_id),
+            headers=HEADERS,
+            timeout=15
+        )
         if response.status_code != 200:
             await destination.send(f"Lỗi API: {response.status_code}")
             return
