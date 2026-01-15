@@ -312,6 +312,7 @@ async def bet_create(ctx, *, raw: str):
 
     await ctx.send(msg)
 
+
 @bet.command(name="join")
 async def bet_join(ctx, option: int, amount: int):
     global active_bet
@@ -351,6 +352,7 @@ async def bet_join(ctx, option: int, amount: int):
     await ctx.send(
         f"✅ **{ctx.author.display_name}** đã bet `{amount}` SC vào **{opt['text']}**"
     )
+
 
 @bet.command(name="refund")
 async def bet_refund(ctx):
@@ -458,23 +460,32 @@ async def bet_end(ctx, winning_option: int):
         await ctx.send("⛔ Mày không có quyền chốt kèo.")
         return
 
-    if not active_bet or not active_bet["ended"]:
-        await ctx.send("❌ Không có kèo đang mở.")
+    if not active_bet:
+        await ctx.send("❌ Không có kèo nào.")
+        return
+
+    if active_bet["open"]:
+        await ctx.send("⚠️ Phải `!bet stop` trước khi end.")
+        return
+
+    if active_bet["ended"]:
+        await ctx.send("⚠️ Kèo này đã được chốt rồi.")
         return
 
     if winning_option not in active_bet["options"]:
         await ctx.send("❌ Lựa chọn thắng không tồn tại.")
         return
+
     active_bet["ended"] = True
-    #active_bet["open"] = False
 
     win_opt = active_bet["options"][winning_option]
     total_win = win_opt["total"]
-    pool = active_bet["total_pool"]
 
-    msg = f"🏁 **KẾT QUẢ BET** 🏁\n"
-    msg += f"🎯 Kèo: {active_bet['title']}\n"
-    msg += f"🏆 Kết quả: **{win_opt['text']}**\n\n"
+    msg = (
+        f"🏁 **KẾT QUẢ BET** 🏁\n"
+        f"🎯 Kèo: {active_bet['title']}\n"
+        f"🏆 Kết quả: **{win_opt['text']}**\n\n"
+    )
 
     if total_win == 0:
         msg += "💀 Không ai bet cửa thắng."
@@ -486,13 +497,15 @@ async def bet_end(ctx, winning_option: int):
 
     for uid, bet_amt in win_opt["bets"].items():
         user = ctx.guild.get_member(uid)
+        if not user:
+            continue
         win_amount = int(bet_amt * WIN_RATE)
-        change_credit(user, win_amount, "Bet thắng x1.5")
-        msg += f"🎉 **{user.display_name}** thắng `{win_amount}` SC (x1.5)\n"
-
+        change_credit(user, win_amount, "Bet thắng")
+        msg += f"🎉 **{user.display_name}** thắng `{win_amount}` SC (x{WIN_RATE})\n"
 
     await ctx.send(msg)
     active_bet = None
+
 
 
 # ====================================================
