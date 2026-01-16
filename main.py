@@ -495,7 +495,7 @@ async def bet_end(ctx, winning_option: int):
         active_bet = None
         return
 
-    WIN_RATE = 1.0
+    WIN_RATE = 1.5
 
     for uid, bet_amt in win_opt["bets"].items():
         user = ctx.guild.get_member(uid)
