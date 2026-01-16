@@ -1,10 +1,12 @@
-﻿﻿import discord
+﻿import discord
 from discord.ext import commands, tasks
 import requests
 from datetime import datetime, timezone, timedelta, time
 from threading import Thread
 import asyncio
 import random
+import json  # <--- THÊM DÒNG NÀY
+import io    # <--- THÊM DÒNG NÀY
 import re
 import os
 from pymongo import MongoClient
@@ -583,6 +585,122 @@ async def daily_check_circle():
     await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
 
 
+<<<<<<< HEAD
+# Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
+async def run_check_and_send(circle_id: int, destination, manual_data=None):
+
+    manual_flag = ''
+    try:
+        data = None
+        
+        # NẾU CÓ DỮ LIỆU THỦ CÔNG THÌ DÙNG LUÔN, KHỎI GỌI API
+        if manual_data:
+            data = manual_data
+            manual_flag = 'tay'
+        else:
+            manual_flag = 'api'
+            # Logic cũ: Gọi API
+            HEADERS = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json"
+            }
+            response = requests.get(
+                API_URL.format(circle_id),
+                headers=HEADERS,
+                timeout=15
+            )
+            if response.status_code != 200:
+                await destination.send(f"Lỗi API: {response.status_code}")
+                return
+            data = response.json()
+
+        # --- BẮT ĐẦU XỬ LÝ DỮ LIỆU (PHẦN NÀY GIỮ NGUYÊN) ---
+        if not data or "circle" not in data or not data.get("members"):
+            await destination.send("Không tìm thấy dữ liệu circle.")
+            return
+            
+        circle = data["circle"]
+        members = data["members"]
+        
+        # Lấy thời gian cập nhật của circle
+        circle_updated_str = circle["last_updated"]
+        circle_date_prefix = circle_updated_str[:10] 
+        circle_updated_dt = datetime.fromisoformat(circle_updated_str.replace("Z", "+00:00"))
+        today = circle_updated_dt.date()
+        yesterday = today - timedelta(days=1)
+        
+        print(f"[DEBUG] Processing date: {today}")
+
+        results = []
+        skipped_count = 0
+        
+        for mem in members:
+            #name = mem.get("trainer_name", "Unknown").strip()
+            # --- [QUAN TRỌNG] LOGIC LẤY TÊN ĐƯỢC SỬA LẠI TẠI ĐÂY ---
+            raw_name = mem.get("trainer_name") # Ưu tiên lấy trainer_name
+            
+            # Nếu trainer_name không có hoặc là None, lấy "name"
+            if not raw_name:
+                raw_name = mem.get("name")
+            
+            # Nếu vẫn không có, đặt là Unknown
+            if not raw_name:
+                name = "Unknown"
+            else:
+                name = str(raw_name).strip() # Chuyển thành chuỗi và xóa khoảng trắng thừa
+
+            if not name: continue
+            
+            updated_str = mem.get("last_updated", "")
+            if not updated_str: continue
+
+            # Check ngày update
+            mem_date_prefix = updated_str[:10]
+            if mem_date_prefix not in (circle_date_prefix, yesterday.strftime("%Y-%m-%d")):
+                skipped_count += 1
+                continue 
+
+            daily = mem.get("daily_fans", [])
+            if len(daily) < today.day:
+                continue
+
+            try:
+                updated_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+                mem_date = updated_dt.date()
+                idx_today = mem_date.day - 1 
+                idx_yesterday = idx_today - 1
+                
+                if idx_today >= len(daily) or idx_yesterday < 0:
+                    continue
+                    
+                fans_today = daily[idx_today]
+                fans_yesterday = daily[idx_yesterday] if idx_yesterday >= 0 else 0
+                diff = fans_today - fans_yesterday
+            except Exception as e:
+                print(f"[DEBUG] Skip {name}: parse error {e}")
+                continue
+
+            signal = "✅" if diff >= 999_000 else "⚡"
+            status = f"đã thoát được hôm nay với `{diff:,}` fans" if diff >= 999_000 else f"Chỉ cày được `{diff:,}` fans nên sẽ bị chích điện"
+            results.append({
+                "signal": signal,
+                "name": name,
+                "diff": diff,
+                "status": status
+            })
+
+        if not results:
+            await destination.send(f"Không có dữ liệu hợp lệ để báo cáo hôm nay (Skipped: {skipped_count})")
+            return
+
+        results.sort(key=lambda x: x["diff"], reverse=True)
+        msg = f"**Club {circle['name']} ({circle['circle_id']})**\n"
+        msg += f"**Báo cáo KPI ngày {yesterday.day}/{yesterday.month} → {today.day}/{today.month}** (Check {manual_flag})\n\n"
+        
+        for i, r in enumerate(results, 1):
+            msg += f"`{i:2}.` **{r['signal']} {r['name']}**: {r['status']}\n"
+            
+=======
 import aiohttp
 from datetime import datetime, timedelta, timezone
 
@@ -723,6 +841,7 @@ async def run_check_and_send(circle_id: int, destination):
         for i, r in enumerate(results, 1):
             msg += f"`{i:2}.` **{r['signal']} {r['name']}**: {r['status']}\n"
 
+>>>>>>> 315b781c9134e1feffdef296279c67339cf8a5d1
         if len(msg) > 1950:
             for part in (
                 msg[i : i + 1950] for i in range(0, len(msg), 1950)
@@ -735,6 +854,59 @@ async def run_check_and_send(circle_id: int, destination):
         await destination.send(f"🚨 Lỗi nghiêm trọng: {e}")
         print(f"[run_check_and_send] Exception: {e}")
 
+# Biến này sẽ lưu nội dung file JSON gần nhất bạn gửi
+last_manual_data = None
+
+@bot.command(name="usejson")
+async def use_json_data(ctx):
+    global last_manual_data  # <--- Khai báo dùng biến toàn cục
+
+    # Kiểm tra xem có file đính kèm không
+    if not ctx.message.attachments:
+        await ctx.send("❌ Vui lòng đính kèm file JSON vào lệnh này!")
+        return
+
+    attachment = ctx.message.attachments[0]
+    
+    if not attachment.filename.endswith('.json') and not attachment.filename.endswith('.txt'):
+        await ctx.send("❌ File phải có đuôi .json hoặc .txt")
+        return
+
+    try:
+        # Đọc nội dung file
+        file_content = await attachment.read()
+        json_data = json.loads(file_content)
+        
+        # --- LƯU VÀO BỘ NHỚ ---
+        last_manual_data = json_data 
+        
+        await ctx.send(f"✅ Đã đọc và **lưu** dữ liệu từ file **{attachment.filename}**.")
+        
+        # Chạy báo cáo ngay lập tức
+        #await run_check_and_send(CIRCLE_ID_TO_CHECK, ctx.channel, manual_data=json_data)
+        #await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, ctx.channel, manual_data=json_data)
+
+    except json.JSONDecodeError:
+        await ctx.send("❌ Nội dung file không phải JSON hợp lệ.")
+    except Exception as e:
+        await ctx.send(f"❌ Lỗi khi xử lý: {e}")
+        print(e)
+
+@bot.command(name="cf")
+async def check_from_cache(ctx):
+    global last_manual_data # Lấy dữ liệu đã lưu
+
+    if last_manual_data is None:
+        await ctx.send("❌ Chưa có dữ liệu lưu trữ! Hãy dùng lệnh `!usejson` kèm file JSON trước một lần.")
+        return
+
+    await ctx.send("📂 **Sử dụng lại dữ liệu từ file JSON gần nhất...**")
+
+    # Gọi hàm xử lý với dữ liệu cũ
+    await run_check_and_send(CIRCLE_ID_TO_CHECK, ctx.channel, manual_data=last_manual_data)
+    #await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, ctx.channel, manual_data=last_manual_data)
+    
+    await ctx.send("🏁 **Hoàn tất báo cáo (dữ liệu cũ).**")
 
 
 # LỆNH THỦ CÔNG: !cc hoặc !circle (có thể bỏ trống ID → dùng ID mặc định)
@@ -750,29 +922,34 @@ async def kpi(ctx):
     await ctx.send("⏳ **Đang kiểm tra KPI (thủ công)...**")
     await check_kpi_day_week_month_manual(CIRCLE_ID_TO_CHECK, ctx.channel)
 
-async def check_kpi_day_week_month(circle_id: int, channel):
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json"
-    }
-    response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
-    if response.status_code != 200:
-        await channel.send(f"❌ KPI API lỗi: {response.status_code}")
-        return
+async def check_kpi_day_week_month(circle_id: int, channel, manual_data=None):
+    data = None
+    manual_flag = ''
 
-    data = response.json()
+    # Ưu tiên dùng dữ liệu thủ công
+    if manual_data:
+        manual_flag = 'tay'
+        data = manual_data
+    else:
+        manual_flag = 'api'
+        HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json"
+        }
+        response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
+        if response.status_code != 200:
+            await channel.send(f"❌ KPI API lỗi: {response.status_code}")
+            return
+        data = response.json()
+
+    # --- PHẦN XỬ LÝ (GIỮ NGUYÊN) ---
     circle = data["circle"]
     members = data["members"]
 
-    circle_updated_dt = datetime.fromisoformat(
-        circle["last_updated"].replace("Z", "+00:00")
-    )
+    circle_updated_dt = datetime.fromisoformat(circle["last_updated"].replace("Z", "+00:00"))
     today = circle_updated_dt.date()
-    day_index = today.day - 1  # index hôm nay (0-based)
+    day_index = today.day - 1 
 
-    report_day = []
     report_week = []
     report_month = []
 
@@ -783,48 +960,22 @@ async def check_kpi_day_week_month(circle_id: int, channel):
         if len(daily) <= day_index:
             continue
 
-        # ===== KPI NGÀY =====
-        today_fan = daily[day_index]
-        yesterday_fan = daily[day_index - 1] if day_index > 0 else 0
-        diff_day = today_fan - yesterday_fan
-
-        report_day.append(
-            f"{'✅' if diff_day >= 1_000_000 else '⚡'} **{name}**: `{diff_day:,}`"
-        )
-
-        # ===== KPI TUẦN (chủ nhật) =====
+        # KPI TUẦN (chủ nhật)
         if today.weekday() == 6 and day_index >= 6:
             week_fans = daily[day_index] - daily[day_index - 6]
-            report_week.append(
-                f"{'✅' if week_fans >= 6_000_000 else '⚡'} **{name}**: `{week_fans:,}`"
-            )
+            report_week.append(f"{'✅' if week_fans >= 6_000_000 else '⚡'} **{name}**: `{week_fans:,}`")
 
-        # ===== KPI THÁNG (ngày cuối tháng) =====
+        # KPI THÁNG (ngày cuối tháng)
         next_day = today + timedelta(days=1)
         if next_day.month != today.month:
             month_fans = daily[day_index] - daily[0]
-            report_month.append(
-                f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`"
-            )
-
-    # ===== GỬI BÁO CÁO =====
-    #if report_day:
-    #    await channel.send(
-    #        f"📊 **KPI NGÀY ({today.strftime('%d/%m')}) – 1M fan/người**\n"
-    #        + "\n".join(report_day)
-    #    )
+            report_month.append(f"{'✅' if month_fans >= 30_000_000 else '⚡'} **{name}**: `{month_fans:,}`")
 
     if report_week:
-        await channel.send(
-            f"📍 **KPI TUẦN – 6M fan/người**\n"
-            + "\n".join(report_week)
-        )
+        await channel.send(f"📍 **KPI TUẦN – 6M fan/người**\n" + "\n".join(report_week))
 
     if report_month:
-        await channel.send(
-            f"📍 **KPI THÁNG ({today.month}) – 30M fan/người**\n"
-            + "\n".join(report_month)
-        )
+        await channel.send(f"📍 **KPI THÁNG ({today.month}) – 30M fan/người**\n" + "\n".join(report_month))
 
 async def check_kpi_day_week_month_manual(circle_id: int, channel):
     HEADERS = {
