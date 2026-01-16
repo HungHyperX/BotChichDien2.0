@@ -227,13 +227,13 @@ async def on_message(message):
         return False
 
     # 1️⃣ MENTION SPOUSE
-    if SPOUSE_USER_ID in [m.id for m in message.mentions]:
-        if not check_spouse_cooldown(message.author.id):
-            try:
-                await message.reply("Gọi gì chồng bà 😡💢😏")
-                spouse_interaction_cooldown[message.author.id] = datetime.now(timezone.utc)
-            except Exception as e:
-                print("Mention reply error:", e)
+    #if SPOUSE_USER_ID in [m.id for m in message.mentions]:
+     #   if not check_spouse_cooldown(message.author.id):
+      #      try:
+       #         await message.reply("Gọi gì chồng bà 😡💢😏")
+       #         spouse_interaction_cooldown[message.author.id] = datetime.now(timezone.utc)
+        #    except Exception as e:
+          #      print("Mention reply error:", e)
 
     # 2️⃣ REPLY SPOUSE
     if message.reference:
