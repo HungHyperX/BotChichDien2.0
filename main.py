@@ -268,10 +268,10 @@ async def bet(ctx):
         "📌 **LỆNH BET**\n"
         "`**Tạo bet:** !bet create <title> | <opt1> | <opt2> ...`\n"
         "`**Đặt bet:**!bet join <số_option> <credit>`\n"
-        "`**Dừng bet:** !bet stop\n`"
-        "`**Kết thúc bet:** !bet end <số_option_thắng>\n`"
-        "`**Xem bet:** !bet info\n`"
-        "`**Bể bet:** !bet refund\n`"
+        "`**Dừng bet:** !bet stop`\n"
+        "`**Kết thúc bet:** !bet end <số_option_thắng>`\n"
+        "`**Xem bet:** !bet info`\n"
+        "`**Bể bet:** !bet refund`\n"
     )
 
 
@@ -553,6 +553,49 @@ async def social_credit(ctx):
     await ctx.send(
         f"💳 **Social Credit của {user.display_name}:** `{data['social_credit']}`"
     )
+
+@bot.command(name="grant")
+async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Special grant"):
+    # 🔒 CHỈ SPOUSE ĐƯỢC DÙNG
+    if ctx.author.id != SPOUSE_USER_ID:
+        await ctx.send("⛔ Mày không có quyền dùng lệnh này.")
+        return
+
+    # ===== TRAO CHO TẤT CẢ =====
+    if target.lower() == "all":
+        affected = 0
+        for member in ctx.guild.members:
+            if member.bot:
+                continue
+            ensure_user(member)
+            change_credit(member, amount, reason)
+            affected += 1
+
+        sign = "+" if amount > 0 else ""
+        await ctx.send(
+            f"👑 **SPOUSE COMMAND** 👑\n"
+            f"🌍 Đã áp dụng `{sign}{amount}` Social Credit cho **{affected} người**\n"
+            f"📝 Lý do: *{reason}*"
+        )
+        return
+
+    # ===== TRAO CHO 1 NGƯỜI =====
+    if not ctx.message.mentions:
+        await ctx.send("❌ Phải tag người dùng hoặc dùng `all`.")
+        return
+
+    member = ctx.message.mentions[0]
+
+    ensure_user(member)
+    change_credit(member, amount, reason)
+
+    sign = "+" if amount > 0 else ""
+    await ctx.send(
+        f"👑 **SPOUSE COMMAND** 👑\n"
+        f"👤 **{member.display_name}** nhận `{sign}{amount}` Social Credit\n"
+        f"📝 Lý do: *{reason}*"
+    )
+
 
 @bot.command(name="supremacy")
 async def supremacy(ctx):
