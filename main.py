@@ -328,8 +328,8 @@ async def bet_join(ctx, option: int, amount: int):
         return
 
     # 🔒 GIỚI HẠN BET
-    if amount < 10 or amount > 200:
-        await ctx.send("❌ Chỉ được bet từ **10 đến 200** Social Credit.")
+    if amount < 10 or amount > 360:
+        await ctx.send("❌ Chỉ được bet từ **10 đến 360** Social Credit.")
         return
 
     user_data = ensure_user(ctx.author)
