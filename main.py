@@ -563,21 +563,31 @@ async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Specia
 
     # ===== TRAO CHO TẤT CẢ =====
     if target.lower() == "all":
+        users = list(db.users.find({}))  # hoặc collection bạn dùng
         affected = 0
-        for member in ctx.guild.members:
-            if member.bot:
-                continue
-            ensure_user(member)
-            change_credit(member, amount, reason)
+
+        for user in users:
+            user_id = user["user_id"]
+
+            # fake object tối thiểu
+            class Dummy:
+                id = user_id
+                bot = False
+                display_name = f"User {user_id}"
+
+            dummy = Dummy()
+
+            change_credit(dummy, amount, reason)
             affected += 1
 
         sign = "+" if amount > 0 else ""
         await ctx.send(
             f"👑 **SPOUSE COMMAND** 👑\n"
-            f"🌍 Đã áp dụng `{sign}{amount}` Social Credit cho **{affected} người**\n"
+            f"🌍 Đã áp dụng `{sign}{amount}` Social Credit cho **{affected} user trong DB**\n"
             f"📝 Lý do: *{reason}*"
         )
         return
+
 
     # ===== TRAO CHO 1 NGƯỜI =====
     if not ctx.message.mentions:
