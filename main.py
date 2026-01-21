@@ -563,21 +563,13 @@ async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Specia
 
     # ===== TRAO CHO TẤT CẢ =====
     if target.lower() == "all":
-        users = list(db.users.find({}))  # hoặc collection bạn dùng
+        users = list(users_col.find({}))
         affected = 0
 
         for user in users:
             user_id = user["user_id"]
 
-            # fake object tối thiểu
-            class Dummy:
-                id = user_id
-                bot = False
-                display_name = f"User {user_id}"
-
-            dummy = Dummy()
-
-            change_credit(dummy, amount, reason)
+            change_credit(user_id, amount, reason)
             affected += 1
 
         sign = "+" if amount > 0 else ""
@@ -587,7 +579,6 @@ async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Specia
             f"📝 Lý do: *{reason}*"
         )
         return
-
 
     # ===== TRAO CHO 1 NGƯỜI =====
     if not ctx.message.mentions:
