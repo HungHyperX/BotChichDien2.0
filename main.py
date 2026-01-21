@@ -569,7 +569,7 @@ async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Specia
         for user in users:
             user_id = user["user_id"]
 
-            change_credit(user_id, amount, reason)
+            change_credit_by_id(user_id, amount, reason)
             affected += 1
 
         sign = "+" if amount > 0 else ""
@@ -595,6 +595,14 @@ async def grant_social_credit(ctx, target, amount: int, *, reason: str = "Specia
         f"👑 **SPOUSE COMMAND** 👑\n"
         f"👤 **{member.display_name}** nhận `{sign}{amount}` Social Credit\n"
         f"📝 Lý do: *{reason}*"
+    )
+
+
+def change_credit_by_id(user_id: int, amount: int, reason: str):
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$inc": {"social_credit": amount}},
+        upsert=True
     )
 
 
