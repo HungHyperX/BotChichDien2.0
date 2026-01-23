@@ -279,7 +279,7 @@ async def bet(ctx):
 async def bet_create(ctx, *, raw: str):
     global active_bet
 
-    if ctx.author.id != BET_ADMIN_ID:
+    if ctx.author.id != BET_ADMIN_ID and ctx.author.id != SPOUSE_USER_ID:
         await ctx.send("⛔ Mày không có quyền tạo kèo.")
         return
 
@@ -360,7 +360,7 @@ async def bet_join(ctx, option: int, amount: int):
 async def bet_refund(ctx):
     global active_bet
 
-    if ctx.author.id != BET_ADMIN_ID:
+    if ctx.author.id != BET_ADMIN_ID and ctx.author.id != SPOUSE_USER_ID:
         await ctx.send("⛔ Mày không có quyền refund kèo.")
         return
 
@@ -433,7 +433,7 @@ async def bet_info(ctx):
 async def bet_stop(ctx):
     global active_bet
 
-    if ctx.author.id != BET_ADMIN_ID:
+    if ctx.author.id != BET_ADMIN_ID and ctx.author.id != SPOUSE_USER_ID:
         await ctx.send("⛔ Mày không có quyền stop kèo.")
         return
 
@@ -458,7 +458,7 @@ async def bet_stop(ctx):
 async def bet_end(ctx, winning_option: int):
     global active_bet
 
-    if ctx.author.id != BET_ADMIN_ID:
+    if ctx.author.id != BET_ADMIN_ID and ctx.author.id != SPOUSE_USER_ID:
         await ctx.send("⛔ Mày không có quyền chốt kèo.")
         return
 
