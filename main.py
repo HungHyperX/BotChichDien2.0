@@ -144,10 +144,8 @@ async def on_message(message):
 
             # 🎁 TÍNH BONUS STREAK
             MAX_REWARD = 10
-
             streak_bonus = (streak - 1) // 36 + 1
             total_reward = base_points + streak_bonus
-
             # Nerf: cap tổng thưởng
             total_reward = min(total_reward, MAX_REWARD)
 
@@ -610,6 +608,93 @@ def change_credit_by_id(user_id: int, amount: int, reason: str):
         upsert=True
     )
 
+def get_random_user_from_db():
+    users = list(users_col.find({}))
+    if not users:
+        return None
+    return random.choice(users)
+
+@bot.command(name="punish")
+async def punish_random(ctx, target: str, amount: int, *, reason: str = "Random punishment"):
+    # 🔒 CHỈ SPOUSE ĐƯỢC DÙNG
+    if ctx.author.id != SPOUSE_USER_ID:
+        await ctx.send("⛔ Mày không có quyền dùng lệnh này.")
+        return
+
+    if target.lower() != "random":
+        await ctx.send("❌ Cú pháp: `!punish random <amount> [reason]`")
+        return
+
+    if amount <= 0:
+        await ctx.send("❌ Amount phải là số dương.")
+        return
+
+    user_doc = get_random_user_from_db()
+    if not user_doc:
+        await ctx.send("❌ Database trống.")
+        return
+
+    user_id = user_doc["user_id"]
+    member = ctx.guild.get_member(user_id)
+
+    # Trừ điểm trực tiếp bằng ID (kể cả user không còn trong server)
+    change_credit_by_id(user_id, -amount, reason)
+
+    if member:
+        name = member.display_name
+    else:
+        name = f"User `{user_id}` (not in server)"
+
+    await ctx.send(
+        f"⚡ **RANDOM PUNISHMENT** ⚡\n"
+        f"🎯 Nạn nhân: **{name}**\n"
+        f"💥 Bị trừ: `-{amount}` Social Credit\n"
+        f"📝 Lý do: *{reason}*"
+    )
+
+def transfer_credit(from_user, to_user, amount: int, reason: str):
+    # Trừ người gửi
+    change_credit(from_user, -amount, f"Transfer to {to_user.id}: {reason}")
+    # Cộng người nhận
+    change_credit(to_user, amount, f"Transfer from {from_user.id}: {reason}")
+
+MAX_TRANSFER_AMOUNT = 500
+
+@bot.command(name="pay", aliases=["transfer", "send"])
+async def pay_social_credit(ctx, member: discord.Member, amount: int, *, reason: str = "User transfer"):
+    sender = ctx.author
+    receiver = member
+
+    if sender.id == receiver.id:
+        await ctx.send("❌ Tự chuyển cho chính mình là sao mày?")
+        return
+
+    if amount <= 0:
+        await ctx.send("❌ Amount phải là số dương.")
+        return
+
+    if amount > MAX_TRANSFER_AMOUNT:
+        await ctx.send(
+            f"❌ Mỗi lần chỉ được chuyển tối đa `{MAX_TRANSFER_AMOUNT}` Social Credit."
+        )
+        return
+
+    sender_data = ensure_user(sender)
+    ensure_user(receiver)
+
+    if sender_data["social_credit"] < amount:
+        await ctx.send("❌ Mày không đủ Social Credit.")
+        return
+
+    transfer_credit(sender, receiver, amount, reason)
+
+    await ctx.send(
+        f"💸 **CHUYỂN SOCIAL CREDIT** 💸\n"
+        f"👤 Người gửi: **{sender.display_name}**\n"
+        f"🎯 Người nhận: **{receiver.display_name}**\n"
+        f"💰 Số tiền: `{amount}` SC\n"
+        f"📝 Lý do: *{reason}*"
+    )
 
 @bot.command(name="supremacy")
 async def supremacy(ctx):
