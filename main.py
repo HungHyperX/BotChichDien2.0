@@ -9,6 +9,7 @@ import json  # <--- THÊM DÒNG NÀY
 import io    # <--- THÊM DÒNG NÀY
 import re
 import os
+import aiohttp
 from pymongo import MongoClient
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
@@ -745,15 +746,28 @@ async def run_check_and_send(circle_id: int, destination, manual_data=None):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json"
             }
-            response = requests.get(
-                API_URL.format(circle_id),
-                headers=HEADERS,
-                timeout=15
-            )
-            if response.status_code != 200:
-                await destination.send(f"Lỗi API: {response.status_code}")
-                return
-            data = response.json()
+            #response = requests.get(
+            #    API_URL.format(circle_id),
+            #    headers=HEADERS,
+            #    timeout=15
+            #)
+            #if response.status_code != 200:
+            #    await destination.send(f"Lỗi API: {response.status_code}")
+            #    return
+            #data = response.json()
+	    async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(API_URL.format(circle_id), headers=HEADERS, timeout=15) as response:
+                        if response.status != 200:
+                            await destination.send(f"Lỗi API: {response.status}")
+                            return
+                        data = await response.json()
+                except asyncio.TimeoutError:
+                    await destination.send("⚠️ API Uma phản hồi quá lâu (Timeout).")
+                    return
+                except Exception as e:
+                    await destination.send(f"⚠️ Lỗi kết nối API: {e}")
+                    return
 
         # --- BẮT ĐẦU XỬ LÝ DỮ LIỆU (PHẦN NÀY GIỮ NGUYÊN) ---
         if not data or "circle" not in data or not data.get("members"):
@@ -932,11 +946,21 @@ async def check_kpi_day_week_month(circle_id: int, channel, manual_data=None):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json"
         }
-        response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
-        if response.status_code != 200:
-            await channel.send(f"❌ KPI API lỗi: {response.status_code}")
-            return
-        data = response.json()
+        #response = requests.get(API_URL.format(circle_id), HEADERS, timeout=15)
+        #if response.status_code != 200:
+        #    await channel.send(f"❌ KPI API lỗi: {response.status_code}")
+        #    return
+        #data = response.json()
+	async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(API_URL.format(circle_id), headers=HEADERS, timeout=15) as response:
+                    if response.status != 200:
+                        await channel.send(f"❌ KPI API lỗi: {response.status}")
+                        return
+                    data = await response.json()
+            except Exception as e:
+                print(f"Lỗi API KPI: {e}")
+                return
 
     # --- PHẦN XỬ LÝ (GIỮ NGUYÊN) ---
     circle = data["circle"]
@@ -1475,4 +1499,23 @@ def run_flask():
 if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
+
     bot.run(os.getenv('DISCORD_TOKEN'))
+
+    if not token:
+        print("❌ Lỗi: Chưa cấu hình DISCORD_TOKEN trong Environment Variables")
+    else:
+        print("⏳ Đang đợi 10 giây trước khi đăng nhập để tránh Rate Limit...")
+        time.sleep(10)  # <--- DÒNG QUAN TRỌNG: Ngủ 10s trước khi login
+        
+        try:
+            bot.run(token)
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                print("⚠️ BỊ RATE LIMIT (429)! Đang ngủ 1 tiếng...")
+                # Nếu bị 429, ngủ lâu để Cloudflare thả IP (dù Render có thể kill process này nhưng vẫn tốt hơn là crash ngay)
+                time.sleep(3600) 
+            else:
+                print(f"❌ Lỗi HTTP: {e}")
+        except Exception as e:
+            print(f"❌ Lỗi Runtime: {e}")
