@@ -1480,42 +1480,41 @@ async def rps_rule(ctx):
 from flask import Flask
 import os
 import threading
-# Tạo Flask app giả để Render happy (chỉ cần endpoint /ping)
-app = Flask(__name__)
+# # Tạo Flask app giả để Render happy (chỉ cần endpoint /ping)
+# app = Flask(__name__)
 
 
-@app.route('/ping', methods=['GET'])
-def ping():
-    return "Bot awake!", 200
+# @app.route('/ping', methods=['GET'])
+# def ping():
+#     return "Bot awake!", 200
 
 
-# Chạy Flask trên port Render (env var PORT)
-def run_flask():
-    port = int(os.environ.get('PORT', 8080))
+# # Chạy Flask trên port Render (env var PORT)
+# def run_flask():
+#     port = int(os.environ.get('PORT', 8080))
+#     app.run(host='0.0.0.0', port=port)
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run():
+    # Render cấp PORT qua biến môi trường, mặc định là 10000
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
 
 # Chạy Flask trong thread riêng, không block bot
 if __name__ == '__main__':
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-
+    # flask_thread = threading.Thread(target=run_flask, daemon=True)
+    # flask_thread.start()
+    keep_alive()
     bot.run(os.getenv('DISCORD_TOKEN'))
 
-    if not token:
-        print("❌ Lỗi: Chưa cấu hình DISCORD_TOKEN trong Environment Variables")
-    else:
-        print("⏳ Đang đợi 10 giây trước khi đăng nhập để tránh Rate Limit...")
-        time.sleep(10)  # <--- DÒNG QUAN TRỌNG: Ngủ 10s trước khi login
-        
-        try:
-            bot.run(token)
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                print("⚠️ BỊ RATE LIMIT (429)! Đang ngủ 1 tiếng...")
-                # Nếu bị 429, ngủ lâu để Cloudflare thả IP (dù Render có thể kill process này nhưng vẫn tốt hơn là crash ngay)
-                time.sleep(3600) 
-            else:
-                print(f"❌ Lỗi HTTP: {e}")
-        except Exception as e:
-            print(f"❌ Lỗi Runtime: {e}")
+    
