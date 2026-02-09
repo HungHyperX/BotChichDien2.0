@@ -1515,6 +1515,10 @@ if __name__ == '__main__':
     # flask_thread = threading.Thread(target=run_flask, daemon=True)
     # flask_thread.start()
     keep_alive()
-    bot.run(os.getenv('DISCORD_TOKEN'))
+    #bot.run(os.getenv('DISCORD_TOKEN'))
+    try:
+        bot.run(os.getenv('DISCORD_TOKEN'))
+    except:
+        os.system("kill 1")
 
     
