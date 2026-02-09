@@ -1227,6 +1227,62 @@ async def ott_emoji(ctx):
 
     await ctx.send(msg)
 
+import discord
+
+def get_top_users(limit: int = 10):
+    return list(
+        users_col.find({})
+        .sort("social_credit", -1)
+        .limit(limit)
+    )
+
+@bot.command(name="top", aliases=["leaderboard", "rank", "bxh"])
+async def top_social_credit(ctx, limit: int = 10):
+    # Giới hạn tránh spam
+    limit = max(1, min(limit, 50))
+
+    top_users = get_top_users(limit)
+
+    if not top_users:
+        await ctx.send("❌ Database trống, chưa có ai đăng ký Social Credit.")
+        return
+
+    embed = discord.Embed(
+        title="🏆 BẢNG XẾP HẠNG SOCIAL CREDIT",
+        description=f"Top **{len(top_users)}** công dân gương mẫu nhất",
+        color=discord.Color.gold()
+    )
+
+    embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else discord.Embed.Empty)
+    embed.set_footer(
+        text=f"Yêu cầu bởi {ctx.author.display_name}",
+        icon_url=ctx.author.display_avatar.url
+    )
+
+    leaderboard_text = ""
+
+    for i, u in enumerate(top_users, start=1):
+        user_id = int(u["user_id"])
+        credit = u.get("social_credit", 0)
+
+        member = ctx.guild.get_member(user_id)
+        name = member.display_name if member else u.get("username", f"User {user_id}")
+
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, "🔹")
+
+        leaderboard_text += (
+            f"**{i}. {medal} {name}**\n"
+            f"↳ 💳 `{credit}` Social Credit\n\n"
+        )
+
+    embed.add_field(
+        name="📊 Xếp hạng",
+        value=leaderboard_text,
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
 import random
 import asyncio
 
