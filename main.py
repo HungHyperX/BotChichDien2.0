@@ -1480,41 +1480,41 @@ async def rps_rule(ctx):
 from flask import Flask
 import os
 import threading
-# # Tạo Flask app giả để Render happy (chỉ cần endpoint /ping)
-# app = Flask(__name__)
+# Tạo Flask app giả để Render happy (chỉ cần endpoint /ping)
+app = Flask(__name__)
 
 
-# @app.route('/ping', methods=['GET'])
-# def ping():
-#     return "Bot awake!", 200
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "Bot awake!", 200
 
 
-# # Chạy Flask trên port Render (env var PORT)
-# def run_flask():
-#     port = int(os.environ.get('PORT', 8080))
-#     app.run(host='0.0.0.0', port=port)
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is alive!"
-
-def run():
-    # Render cấp PORT qua biến môi trường, mặc định là 10000
-    port = int(os.environ.get("PORT", 10000))
+# Chạy Flask trên port Render (env var PORT)
+def run_flask():
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+#app = Flask('')
+
+#@app.route('/')
+#def home():
+#    return "Bot is alive!"
+
+#def run():
+#    # Render cấp PORT qua biến môi trường, mặc định là 10000
+#    port = int(os.environ.get("PORT", 10000))
+#    app.run(host='0.0.0.0', port=port)
+
+#def keep_alive():
+#    t = Thread(target=run)
+#    t.start()
 
 
 # Chạy Flask trong thread riêng, không block bot
 if __name__ == '__main__':
-    # flask_thread = threading.Thread(target=run_flask, daemon=True)
-    # flask_thread.start()
-    keep_alive()
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    #keep_alive()
     #bot.run(os.getenv('DISCORD_TOKEN'))
     try:
         bot.run(os.getenv('DISCORD_TOKEN'))
