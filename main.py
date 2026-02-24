@@ -50,6 +50,25 @@ CORRECT_REGEX = re.compile(
 @bot.event
 async def on_message(message):
 
+    # ================= WELCOME LOG CHANNEL =================
+    if message.channel.id == WELCOME_LOG_CHANNEL_ID:
+        # Bỏ qua nếu là bot của mình
+        if message.author.id == bot.user.id:
+            return
+
+        # Chỉ xử lý nếu là bot khác
+        if message.author.bot:
+
+            # Nếu bot có mention user
+            if message.mentions:
+                for member in message.mentions:
+                    await message.channel.send(
+                        f"🎉 WELCUM {member.mention} đến **STRATEGIST**.\n"
+                        f"Hãy gõ `!registerDB` để đăng kí tài khoản :>"
+                    )
+
+            return
+
     # ================= CHECK BOT LOG CHANNEL =================
     if message.channel.id == LEAVE_LOG_CHANNEL_ID or message.channel.id == LEAVE_LOG_CHANNEL_ID_2 or message.channel.id == LEAVE_LOG_CHANNEL_ID_3:
 
@@ -88,7 +107,7 @@ async def on_message(message):
                 await message.channel.send(embed=embed)
 
     # đoán uma
-    if message.author.id == 1400050839544008804:
+    if message.author.id == 14:
         match = CORRECT_REGEX.search(message.content)
         if match:
             # Lấy thông tin từ regex
