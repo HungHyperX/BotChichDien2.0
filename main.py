@@ -26,6 +26,8 @@ last_message_time = {}  # {user_id: datetime}
 LEFT_REGEX = re.compile(r"User\s+<?@?(\d+)>?\s+left", re.IGNORECASE)
 ID_REGEX = re.compile(r"\b(\d{17,20})\b")
 
+saved_cm_message = None
+
 def remove_mentions(text: str) -> str:
     # User mention <@123> hoặc <@!123>
     text = re.sub(r'<@!?\d+>', '', text)
@@ -1001,6 +1003,51 @@ async def top_social_credit(ctx, limit: int = 10):
     )
 
     await ctx.send(embed=embed)
+
+@bot.command(name="setcm")
+async def set_cm(ctx):
+    global saved_cm_message
+
+    # Bắt buộc phải reply
+    if not ctx.message.reference:
+        await ctx.send("❌ Hãy reply vào tin nhắn muốn copy rồi dùng `!setcm`")
+        return
+
+    try:
+        msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+    except:
+        await ctx.send("❌ Không fetch được tin nhắn.")
+        return
+
+    # Lưu nội dung cơ bản
+    saved_cm_message = {
+        "content": msg.content,
+        "embeds": msg.embeds,
+        "attachments": msg.attachments
+    }
+
+    await ctx.send("✅ Đã lưu tin nhắn làm CM.")
+
+@bot.command(name="cm")
+async def cm(ctx):
+    global saved_cm_message
+
+    if not saved_cm_message:
+        await ctx.send("❌ Chưa có tin nhắn nào được lưu.")
+        return
+
+    files = []
+
+    # Lấy lại file nếu có
+    for att in saved_cm_message["attachments"]:
+        file_bytes = await att.read()
+        files.append(discord.File(io.BytesIO(file_bytes), filename=att.filename))
+
+    await ctx.send(
+        content=saved_cm_message["content"],
+        embeds=saved_cm_message["embeds"],
+        files=files if files else None
+    )
 
 import random
 import asyncio
