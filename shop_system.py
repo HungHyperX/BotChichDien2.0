@@ -8,15 +8,15 @@ class ShopSystem(commands.Cog):
 
         # Danh sách vật phẩm
         self.SHOP_ITEMS = {
-            "FinalShowdownPoint": {
+            "finalshowdown_point": {
                 "price": 250,
                 "description": "1 điểm Final Showdown Qualifier.\nMua xong liên hệ <@!969465805555261480>"
             },
-            "ShoppingPoint": {
+            "shopping_point": {
                 "price": 200,
                 "description": "1 điểm mua hàng.\nMua xong liên hệ <@!969465805555261480>"
             },
-            "jailBreak": {
+            "jail_break": {
                 "price": 36000,
                 "description": "Vé tự do ra tù. Có trong người ra vào nhà tù tự do trong 1 tháng"
             }
