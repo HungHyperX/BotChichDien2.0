@@ -18,7 +18,8 @@ def create_user(user):
     doc = {
         "user_id": user.id,
         "username": str(user),
-        "social_credit": credit
+        "social_credit": credit,
+        "inventory": {}   # 👈 THÊM DÒNG NÀY
     }
     users_col.insert_one(doc)
     return credit
@@ -56,4 +57,17 @@ def get_top_users(limit=10):
         .sort("social_credit", -1)
         .limit(limit)
     )
+
+def add_item(user_id: int, item_name: str, amount: int = 1):
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$inc": {f"inventory.{item_name}": amount}}
+    )
+
+def get_inventory(user_id: int):
+    user = users_col.find_one({"user_id": user_id})
+    if not user:
+        return {}
+    return user.get("inventory", {})
+
 

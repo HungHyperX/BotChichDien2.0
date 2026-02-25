@@ -83,8 +83,8 @@ class BetSystem(commands.Cog):
             await ctx.send("❌ Lựa chọn không tồn tại.")
             return
 
-        if amount < 10 or amount > 360:
-            await ctx.send("❌ Chỉ được bet từ 10 đến 360 SC.")
+        if amount < 10 or amount > 670:
+            await ctx.send("❌ Chỉ được bet từ 10 đến 670 SC.")
             return
 
         user_data = self.ensure_user(ctx.author)
