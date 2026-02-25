@@ -14,6 +14,7 @@ from config import *
 from database import *
 from rob_system import RobSystem
 from bet_system import BetSystem
+from shop_system import ShopSystem
 
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
@@ -200,6 +201,10 @@ async def on_ready():
         )
     )
     print("Bet system loaded.")
+
+    await bot.add_cog(ShopSystem(bot))
+    print("Shop system loaded.")
+
 
 @bot.command(name="registerDB")
 async def register_db(ctx):
