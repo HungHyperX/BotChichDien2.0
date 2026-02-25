@@ -99,6 +99,7 @@ class RobSystem(commands.Cog):
             "amount": amount,
             "success": success,
             "defended": False,
+            "defenders": [],  # 👈 THÊM DÒNG NÀY
             "created_at": now,
             "expires_at": now + timedelta(seconds=self.DEFEND_TIME)
         }
@@ -169,9 +170,32 @@ class RobSystem(commands.Cog):
             await ctx.send("❌ Người này không có vụ cướp nào đang hoạt động.")
             return
 
+        # ❌ Không cho robber đi defend hộ
+        if helper.id == rob["robber_id"]:
+            await ctx.send("💀 Mày là thằng đi cướp, defend cái gì?")
+            return
+
+        defenders = rob.get("defenders", [])
+
+        # ❌ Mỗi người chỉ được defend 1 lần
+        if helper.id in defenders:
+            await ctx.send("❌ Mày đã defend hộ vụ này rồi.")
+            return
+
+        # ❌ Giới hạn 2 người defend
+        if len(defenders) >= 2:
+            await ctx.send("⚠️ Đã có đủ 2 người defend hộ rồi.")
+            return
+
         defend_success = random.random() < self.DEFEND_FOR_SUCCESS
 
         if not defend_success:
+            # Vẫn tính là đã dùng lượt
+            self.rob_col.update_one(
+                {"_id": rob["_id"]},
+                {"$push": {"defenders": helper.id}}
+            )
+
             await ctx.send("💥 Defend hộ thất bại!")
             return
 
@@ -179,23 +203,25 @@ class RobSystem(commands.Cog):
         robber_id = rob["robber_id"]
         robber = ctx.guild.get_member(robber_id)
 
-        reward = self.DEFEND_REWARD
-        if steal_back < reward:
-            reward = steal_back  # tránh âm tiền
+        reward = min(self.DEFEND_REWARD, steal_back)
 
-        # Trừ tiền từ robber
+        # Trừ robber
         if robber:
             self.change_credit(robber, -steal_back, "Bị phản công (defend hộ)")
 
         # Victim lấy lại phần còn lại
         self.change_credit(victim, steal_back - reward, "Được defend hộ")
 
-        # Helper nhận 36 SC
+        # Helper nhận thưởng
         self.change_credit(helper, reward, "Thưởng defend hộ")
 
+        # Update DB
         self.rob_col.update_one(
             {"_id": rob["_id"]},
-            {"$set": {"defended": True}}
+            {
+                "$set": {"defended": True},
+                "$push": {"defenders": helper.id}
+            }
         )
 
         await ctx.send(
@@ -203,5 +229,6 @@ class RobSystem(commands.Cog):
             f"💰 {victim.display_name} lấy lại `{steal_back - reward}` SC\n"
             f"🏆 {helper.display_name} nhận `{reward}` SC tiền thưởng!"
         )
+
 
 
