@@ -145,7 +145,6 @@ async def on_ready():
     # Auto check fans
     #if not auto_cc_2230.is_running():
     auto_cc_2230.start()
-    auto_cc_1445.start()
 
 
 @bot.command(name="registerDB")
@@ -510,6 +509,24 @@ async def checkcircle(ctx, circle_id: int = None):
     await run_check_and_send(716455843, ctx)
     await run_check_and_send(147613035, ctx)
 
+def safe_segment_gain(daily, start_idx, end_idx):
+    """
+    Tính gain từ start_idx → end_idx.
+    Nếu daily[end_idx] < daily[start_idx]
+    thì lùi end_idx xuống cho tới khi >= start.
+    """
+
+    if end_idx >= len(daily):
+        end_idx = len(daily) - 1
+
+    start_value = daily[start_idx]
+
+    for i in range(end_idx, start_idx, -1):
+        if daily[i] >= start_value:
+            return daily[i] - start_value
+
+    return 0
+
 @bot.command(name="weeklyfans", aliases=["wfans"])
 async def weekly_fans(ctx, circle_id: int = None):
 
@@ -547,13 +564,12 @@ async def weekly_fans(ctx, circle_id: int = None):
 
         last_index = len(daily) - 1
 
-        try:
-            seg1 = daily[8] - daily[0] if last_index >= 7 else 0
-            seg2 = daily[16] - daily[8] if last_index >= 15 else 0
-            seg3 = daily[24] - daily[16] if last_index >= 23 else 0
-            full = daily[last_index] - daily[0]
-        except:
-            continue
+        seg1 = safe_segment_gain(daily, 0, 7) if last_index >= 1 else 0
+        seg2 = safe_segment_gain(daily, 7, 14) if last_index >= 8 else 0
+        seg3 = safe_segment_gain(daily, 14, 21) if last_index >= 16 else 0
+        seg4 = safe_segment_gain(daily, 21, 28) if last_index >= 24 else 0
+
+        full = safe_segment_gain(daily, 0, last_index)
 
         msg += (
             f"**{name}**\n"
