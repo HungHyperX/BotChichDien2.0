@@ -141,11 +141,12 @@ async def on_ready():
     print("Bet system loaded.")
 
     await bot.add_cog(ShopSystem(bot))
-    await bot.add_cog(ShopSystem(bot))
     print("Shop system loaded.")
     # Auto check fans
-    if not auto_cc_2230.is_running():
-        auto_cc_2230.start()
+    #if not auto_cc_2230.is_running():
+    auto_cc_2230.start()
+    auto_cc_1445.start()
+
 
 @bot.command(name="registerDB")
 async def register_db(ctx):
@@ -288,6 +289,21 @@ async def supremacy(ctx):
 
 @tasks.loop(time=time(22, 30, tzinfo=timezone(timedelta(hours=7))))
 async def auto_cc_2230():
+    print("Running auto cc 22:30...")
+
+    channel1 = bot.get_channel(1445650304031785052)
+    channel2 = bot.get_channel(1445419568238694400)
+
+    if channel1:
+        await channel1.send("📊 Auto check circle 716455843 (22:30)")
+        await run_check_and_send(716455843, channel1)
+
+    if channel2:
+        await channel2.send("📊 Auto check circle 147613035 (22:30)")
+        await run_check_and_send(147613035, channel2)
+
+@tasks.loop(time=time(14, 45, tzinfo=timezone(timedelta(hours=7))))
+async def auto_cc_1445():
     print("Running auto cc 22:30...")
 
     channel1 = bot.get_channel(1445650304031785052)
@@ -493,6 +509,65 @@ async def checkcircle(ctx, circle_id: int = None):
 
     await run_check_and_send(716455843, ctx)
     await run_check_and_send(147613035, ctx)
+
+@bot.command(name="weeklyfans", aliases=["wfans"])
+async def weekly_fans(ctx, circle_id: int = None):
+
+    if not circle_id:
+        await ctx.send("❌ Dùng: `!weeklyfans <circle_id>`")
+        return
+
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(API_URL.format(circle_id), headers=HEADERS, timeout=15)
+    if response.status_code != 200:
+        await ctx.send(f"❌ API lỗi: {response.status_code}")
+        return
+
+    data = response.json()
+
+    if "members" not in data:
+        await ctx.send("❌ Không có dữ liệu members.")
+        return
+
+    members = data["members"]
+    circle_name = data["circle"]["name"]
+
+    msg = f"📊 **Weekly Fans Breakdown – {circle_name} ({circle_id})**\n\n"
+
+    for mem in members:
+        name = mem.get("trainer_name") or mem.get("name") or "Unknown"
+        daily = mem.get("daily_fans", [])
+
+        if len(daily) < 2:
+            continue
+
+        last_index = len(daily) - 1
+
+        try:
+            seg1 = daily[8] - daily[0] if last_index >= 7 else 0
+            seg2 = daily[16] - daily[8] if last_index >= 15 else 0
+            seg3 = daily[24] - daily[16] if last_index >= 23 else 0
+            full = daily[last_index] - daily[0]
+        except:
+            continue
+
+        msg += (
+            f"**{name}**\n"
+            f"Tuần 1: `{seg1:,}`\n"
+            f"Tuần 2: `{seg2:,}`\n"
+            f"Tuần 3: `{seg3:,}`\n"         
+            f"📈 Tổng tháng: `{full:,}`\n\n"
+        )
+
+    if len(msg) > 1900:
+        for part in [msg[i:i + 1900] for i in range(0, len(msg), 1900)]:
+            await ctx.send(part)
+    else:
+        await ctx.send(msg)
 
 
 @bot.command(name="kpiChichDien", aliases=["checkkpi"])
