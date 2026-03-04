@@ -1,12 +1,14 @@
 ﻿from pymongo import MongoClient
 import random
 from config import MONGO_URI, DB_NAME
+from datetime import datetime, timezone
 
 mongo_client = MongoClient(MONGO_URI)
 mongo_db = mongo_client[DB_NAME]
 
 users_col = mongo_db["users"]
 rob_col = mongo_db["rob_logs"]
+circle_logs_col = mongo_db["circle_logs"]
 
 
 def get_user(user_id: int):
@@ -70,4 +72,29 @@ def get_inventory(user_id: int):
         return {}
     return user.get("inventory", {})
 
+def save_circle_snapshot(circle_id: int, data: dict):
+    circle = data.get("circle", {})
+    members = data.get("members", [])
 
+    if not circle or not members:
+        return
+
+    try:
+        updated_at = datetime.fromisoformat(
+            circle["last_updated"].replace("Z", "+00:00")
+        )
+    except:
+        updated_at = datetime.now(timezone.utc)
+
+    circle_logs_col.update_one(
+        {"circle_id": circle_id},  # tìm document theo circle_id
+        {
+            "$set": {
+                "circle_name": circle.get("name"),
+                "last_updated": updated_at,
+                "members": members,
+                "updated_at": datetime.now(timezone.utc)
+            }
+        },
+        upsert=True  # nếu chưa có thì tạo mới
+    )
