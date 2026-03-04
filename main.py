@@ -286,23 +286,6 @@ async def supremacy(ctx):
     except Exception as e:
         await ctx.send(f"Lỗi: {e}")
 
-@tasks.loop(time=time(7, 0, tzinfo=timezone(timedelta(hours=7))))
-async def daily_check_circle():
-    channel = bot.get_channel(CHANNEL_ID_TO_SEND)
-    if not channel:
-        print("[7h sáng] Không tìm thấy kênh tự động!")
-        return
-    await channel.send(
-        "Đang tự động kiểm tra + lưu KPI Circle lúc **7h sáng**...")
-    # Lưu KPI hôm qua trước
-    #await save_yesterday_kpi_for_circle(CIRCLE_ID_TO_CHECK)
-    # Sau đó gửi báo cáo chích điện
-    await run_check_and_send(CIRCLE_ID_TO_CHECK, channel)
-    print(
-        f"[7h sáng] Đã gửi báo cáo tự động thành công – {datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y %H:%M')}"
-    )
-    await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
-
 @tasks.loop(time=time(22, 30, tzinfo=timezone(timedelta(hours=7))))
 async def auto_cc_2230():
     print("Running auto cc 22:30...")
@@ -317,8 +300,6 @@ async def auto_cc_2230():
     if channel2:
         await channel2.send("📊 Auto check circle 147613035 (22:30)")
         await run_check_and_send(147613035, channel2)
-
-
 
 # Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
 async def run_check_and_send(circle_id: int, destination, manual_data=None):
@@ -344,6 +325,8 @@ async def run_check_and_send(circle_id: int, destination, manual_data=None):
                         await destination.send(f"Lỗi API: {response.status}")
                         return
                     data = await response.json()
+                    from database import save_circle_snapshot
+                    save_circle_snapshot(circle_id, data)
 
         # --- BẮT ĐẦU XỬ LÝ DỮ LIỆU (PHẦN NÀY GIỮ NGUYÊN) ---
         if not data or "circle" not in data or not data.get("members"):
