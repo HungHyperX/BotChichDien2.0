@@ -303,7 +303,7 @@ async def daily_check_circle():
     )
     await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
 
-@tasks.loop(time=time(11, 05, tzinfo=timezone(timedelta(hours=7))))
+@tasks.loop(time=time(11, 20, tzinfo=timezone(timedelta(hours=7))))
 async def auto_cc_2230():
     print("Running auto cc 22:30...")
 
