@@ -60,7 +60,7 @@ async def on_message(message):
                 for member in message.mentions:
                     await message.channel.send(
                         f"🎉 WELCUM {member.mention} đến **STRATEGIST**.\n"
-                        f"Hãy gõ `!registerDB` để đăng kí tài khoản :>"
+                        f"Hãy gõ `!registerDB` để đăng kí tài khoản bắt đầu tại đây :>"
                     )
 
             return
