@@ -43,13 +43,6 @@ def remove_mentions(text: str) -> str:
 
 spouse_interaction_cooldown = {} 
 
-CORRECT_REGEX = re.compile(
-    r"Correct\s+(?:<@!?(\d+)>|@(.+?))!"
-    r".*?\(\+(\d+)\s+points\)"
-    r".*?Current Streak:\s*\**(\d+)\**",
-    re.IGNORECASE | re.DOTALL
-)
-
 @bot.event
 async def on_message(message):
 
@@ -109,61 +102,6 @@ async def on_message(message):
 
                 await message.channel.send(embed=embed)
 
-    # đoán uma
-    if message.author.id == 14:
-        match = CORRECT_REGEX.search(message.content)
-        if match:
-            # Lấy thông tin từ regex
-            user_id_str = match.group(1) # Nếu là mention <@ID>
-            user_name_str = match.group(2) # Nếu là text @Name
-            base_points = 0# int(match.group(3))
-            streak = int(match.group(4))
-
-            guild = message.guild
-            if not guild: return
-
-            member = None
-            
-            # Trường hợp 1: Bot tag trực tiếp (Có ID)
-            if user_id_str:
-                member = guild.get_member(int(user_id_str))
-            
-            # Trường hợp 2: Bot chỉ ghi tên (Tìm theo tên hiển thị)
-            elif user_name_str:
-                member = discord.utils.get(guild.members, display_name=user_name_str)
-
-            if not member:
-                # Nếu không tìm thấy member, có thể return hoặc log ra
-                print(f"Không tìm thấy member: {user_id_str or user_name_str}")
-                await message.channel.send(
-                    f"**Mở tài khoản đi ku!!!** Gõ !registerDB"
-                )
-                return
-
-            # 🎁 TÍNH BONUS STREAK
-            MAX_REWARD = 10
-            streak_bonus = (streak - 1) // 36 + 1
-            total_reward = base_points + streak_bonus
-            # Nerf: cap tổng thưởng
-            total_reward = min(total_reward, MAX_REWARD)
-
-            # Cộng điểm (Giả sử hàm change_credit của bạn đã hoạt động tốt)
-            change_credit(
-                member,
-                total_reward,
-                reason=f"Correct answer (+{base_points}) + streak bonus (+{streak_bonus})"
-            )
-
-            await message.channel.send(
-                #f"🔥 **{member.display_name}** đúng câu trả lời!\n"
-                #f"➕ Điểm gốc: `{base_points}`\n"
-                #f"🔥 Streak `{streak}` → thưởng `{streak_bonus}` SC\n"
-                f"🏆 **Thưởng:** `{total_reward}` Social Credit"
-            )
-            
-            # QUAN TRỌNG: Return ngay để không bị dính vào logic "if message.author.bot" ở dưới
-            return
-
     if message.author.bot: # Ngăn cho nó k bắt bot
         return
 
@@ -203,8 +141,11 @@ async def on_ready():
     print("Bet system loaded.")
 
     await bot.add_cog(ShopSystem(bot))
+    await bot.add_cog(ShopSystem(bot))
     print("Shop system loaded.")
-
+    # Auto check fans
+    if not auto_cc_2230.is_running():
+        auto_cc_2230.start()
 
 @bot.command(name="registerDB")
 async def register_db(ctx):
@@ -288,44 +229,6 @@ def get_random_user_from_db():
         return None
     return random.choice(users)
 
-@bot.command(name="punish")
-async def punish_random(ctx, target: str, amount: int, *, reason: str = "Random punishment"):
-    # 🔒 CHỈ SPOUSE ĐƯỢC DÙNG
-    if ctx.author.id != SPOUSE_USER_ID:
-        await ctx.send("⛔ Mày không có quyền dùng lệnh này.")
-        return
-
-    if target.lower() != "random":
-        await ctx.send("❌ Cú pháp: `!punish random <amount> [reason]`")
-        return
-
-    if amount <= 0:
-        await ctx.send("❌ Amount phải là số dương.")
-        return
-
-    user_doc = get_random_user_from_db()
-    if not user_doc:
-        await ctx.send("❌ Database trống.")
-        return
-
-    user_id = user_doc["user_id"]
-    member = ctx.guild.get_member(user_id)
-
-    # Trừ điểm trực tiếp bằng ID (kể cả user không còn trong server)
-    change_credit_by_id(user_id, -amount, reason)
-
-    if member:
-        name = member.display_name
-    else:
-        name = f"User `{user_id}` (not in server)"
-
-    await ctx.send(
-        f"⚡ **RANDOM PUNISHMENT** ⚡\n"
-        f"🎯 Nạn nhân: **{name}**\n"
-        f"💥 Bị trừ: `-{amount}` Social Credit\n"
-        f"📝 Lý do: *{reason}*"
-    )
-
 def transfer_credit(from_user, to_user, amount: int, reason: str):
     # Trừ người gửi
     change_credit(from_user, -amount, f"Transfer to {to_user.id}: {reason}")
@@ -399,6 +302,22 @@ async def daily_check_circle():
         f"[7h sáng] Đã gửi báo cáo tự động thành công – {datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y %H:%M')}"
     )
     await check_kpi_day_week_month(CIRCLE_ID_TO_CHECK, channel)
+
+@tasks.loop(time=time(11, 00, tzinfo=timezone(timedelta(hours=7))))
+async def auto_cc_2230():
+    print("Running auto cc 22:30...")
+
+    channel1 = bot.get_channel(1445650304031785052)
+    channel2 = bot.get_channel(1445419568238694400)
+
+    if channel1:
+        await channel1.send("📊 Auto check circle 716455843 (22:30)")
+        await run_check_and_send(716455843, channel1)
+
+    if channel2:
+        await channel2.send("📊 Auto check circle 147613035 (22:30)")
+        await run_check_and_send(147613035, channel2)
+
 
 
 # Hàm chung để xử lý check circle (dùng cho cả lệnh thủ công và tự động)
@@ -579,10 +498,19 @@ async def check_from_cache(ctx):
 # LỆNH THỦ CÔNG: !cc hoặc !circle (có thể bỏ trống ID → dùng ID mặc định)
 @bot.command(name="checkcircle", aliases=["cc", "circle"])
 async def checkcircle(ctx, circle_id: int = None):
-    if circle_id is None:
-        circle_id = CIRCLE_ID_TO_CHECK  # Dùng circle chính nếu không nhập ID
-    await ctx.send(f"Đang kiểm tra Circle `{circle_id}`...")
-    await run_check_and_send(circle_id, ctx)  # Dùng lại hàm chung
+
+    # Nếu có nhập ID → check 1 cái như cũ
+    if circle_id:
+        await ctx.send(f"Đang kiểm tra Circle `{circle_id}`...")
+        await run_check_and_send(circle_id, ctx)
+        return
+
+    # Nếu KHÔNG nhập ID → check cả 2
+    await ctx.send("📊 Đang kiểm tra cả 2 Club...")
+
+    await run_check_and_send(716455843, ctx)
+    await run_check_and_send(147613035, ctx)
+
 
 @bot.command(name="kpiChichDien", aliases=["checkkpi"])
 async def kpi(ctx):
