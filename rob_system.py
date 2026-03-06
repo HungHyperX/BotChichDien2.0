@@ -68,20 +68,19 @@ class RobSystem(commands.Cog):
         now = datetime.now(timezone.utc)
 
         # Cooldown
-        if victim.id != self.SPOUSE_USER_ID:
-            last = self.get_last_rob(robber.id)
-            if last:
-                last_time = last["created_at"]
-                if last_time.tzinfo is None:
-                    last_time = last_time.replace(tzinfo=timezone.utc)
+        last = self.get_last_rob(robber.id)
+        if last:
+            last_time = last["created_at"]
+            if last_time.tzinfo is None:
+                last_time = last_time.replace(tzinfo=timezone.utc)
 
-                elapsed = (now - last_time).total_seconds()
-                if elapsed < self.ROB_DAILY_COOLDOWN:
-                    remain = int(self.ROB_DAILY_COOLDOWN - elapsed)
-                    hours = remain // 3600
-                    minutes = (remain % 3600) // 60
-                    await ctx.send(f"⏳ Còn `{hours}h {minutes}p` nữa.")
-                    return
+            elapsed = (now - last_time).total_seconds()
+            if elapsed < self.ROB_DAILY_COOLDOWN:
+                remain = int(self.ROB_DAILY_COOLDOWN - elapsed)
+                hours = remain // 3600
+                minutes = (remain % 3600) // 60
+                await ctx.send(f"⏳ Còn `{hours}h {minutes}p` nữa.")
+                return
 
         victim_data = self.get_user(victim.id)
         if victim_data["social_credit"] <= 0:
