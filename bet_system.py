@@ -12,6 +12,13 @@ class BetSystem(commands.Cog):
         self.BET_ADMIN_ID_2 = BET_ADMIN_ID_2
         self.SPOUSE_USER_ID = SPOUSE_USER_ID
 
+        self.BET_ADMINS = {
+            BET_ADMIN_ID,
+            BET_ADMIN_ID_2,
+            SPOUSE_USER_ID,
+            692311933726228521
+        }
+
         self.active_bet = None
 
     # ================= GROUP =================
@@ -31,11 +38,7 @@ class BetSystem(commands.Cog):
     @bet.command(name="create")
     async def bet_create(self, ctx, *, raw: str):
 
-        if ctx.author.id not in [
-            self.BET_ADMIN_ID,
-            self.BET_ADMIN_ID_2,
-            self.SPOUSE_USER_ID
-        ]:
+        if ctx.author.id not in self.BET_ADMINS:
             await ctx.send("⛔ Mày không có quyền tạo kèo.")
             return
 
