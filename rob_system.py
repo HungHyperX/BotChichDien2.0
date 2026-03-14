@@ -65,6 +65,13 @@ class RobSystem(commands.Cog):
         self.ensure_user(robber)
         self.ensure_user(victim)
 
+        robber_data = self.get_user(robber.id)
+
+        # ❌ Không đủ Social Credit để rob
+        if robber_data["social_credit"] <= 36:
+            await ctx.send("❌ Cần trên `36` Social Credit mới được đi cướp.")
+            return
+
         now = datetime.now(timezone.utc)
 
         # Cooldown
