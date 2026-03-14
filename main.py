@@ -259,9 +259,20 @@ async def pay_social_credit(ctx, member: discord.Member, amount: int, *, reason:
     sender_data = ensure_user(sender)
     ensure_user(receiver)
 
-    if sender_data["social_credit"] < amount:
+    sender_credit = sender_data["social_credit"]
+
+    if sender_credit < amount:
         await ctx.send("❌ Mày không đủ Social Credit.")
         return
+
+    # ❌ Không cho chuyển nếu khiến sender < 36 SC
+    if sender_credit - amount < 36:
+        await ctx.send(
+            "❌ Không thể chuyển số tiền này.\n"
+            "Sau khi chuyển bạn phải còn **ít nhất 36 Social Credit**."
+        )
+        return
+
 
     transfer_credit(sender, receiver, amount, reason)
 
