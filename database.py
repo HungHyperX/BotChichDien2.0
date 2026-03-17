@@ -9,6 +9,8 @@ mongo_db = mongo_client[DB_NAME]
 users_col = mongo_db["users"]
 rob_col = mongo_db["rob_logs"]
 circle_logs_col = mongo_db["circle_logs"]
+boss_col = mongo_db["boss"]
+
 
 
 def get_user(user_id: int):

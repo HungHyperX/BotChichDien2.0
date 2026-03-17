@@ -15,6 +15,7 @@ from database import *
 from rob_system import RobSystem
 from bet_system import BetSystem
 from shop_system import ShopSystem
+from boss_system import BossSystem
 
 # ================== CẤU HÌNH CỦA BẠN ==================
 intents = discord.Intents.default()
@@ -142,6 +143,19 @@ async def on_ready():
 
     await bot.add_cog(ShopSystem(bot))
     print("Shop system loaded.")
+
+    await bot.add_cog(
+        BossSystem(
+            bot,
+            boss_col,
+            users_col,
+            ensure_user,
+            change_credit,
+            get_user
+        )
+    )
+    print("Boss system loaded.")
+
     # Auto check fans
     #if not auto_cc_2230.is_running():
     auto_cc_2230.start()
