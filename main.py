@@ -1108,5 +1108,7 @@ if __name__ == '__main__':
     #bot.run(os.getenv('DISCORD_TOKEN'))
     try:
         bot.run(DISCORD_TOKEN)
-    except:
-        os.system("kill 1")
+    except Exception as e:
+        print(e)
+    #except:
+    #  os.system("kill 1")
