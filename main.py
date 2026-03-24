@@ -1092,17 +1092,17 @@ async def cm(ctx):
     for url in data.get("attachments", []):
         await ctx.send(url)
 
-@commands.command(name="chichdien")
-async def chichdien(self, ctx, target: discord.Member):
-    attacker = ctx.author
+@bot.command(name="chichdien")
+async def chichdien(ctx, target: discord.Member = None):
+    if target is None:
+        await ctx.send("❌ Tag người vào!")
+        return
 
-    # Lấy tên (KHÔNG ping)
-    attacker_name = attacker.display_name
+    attacker_name = ctx.author.display_name
     target_name = target.display_name
 
     await ctx.send(f"⚡ {target_name} đã bị chích điện bởi {attacker_name}!")
-    await ctx.send(f"<a:chichdien:1484587399748128798>")
-
+    await ctx.send("<a:chichdien:1484587399748128798>")
 
 import random
 import asyncio
