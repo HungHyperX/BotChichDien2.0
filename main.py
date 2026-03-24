@@ -1038,11 +1038,9 @@ async def top_social_credit(ctx, limit: int = 10):
 
 @bot.command(name="setcm")
 async def set_cm(ctx):
-    global saved_cm_message
 
-    # Bắt buộc phải reply
     if not ctx.message.reference:
-        await ctx.send("❌ Hãy reply vào tin nhắn muốn copy rồi dùng `!setcm`")
+        await ctx.send("❌ Hãy reply vào tin nhắn muốn lưu rồi dùng `!setcm`")
         return
 
     try:
@@ -1051,35 +1049,60 @@ async def set_cm(ctx):
         await ctx.send("❌ Không fetch được tin nhắn.")
         return
 
-    # Lưu nội dung cơ bản
-    saved_cm_message = {
+    # Convert embed → dict
+    embeds_data = [embed.to_dict() for embed in msg.embeds]
+
+    # Lưu link attachment (không lưu file cho nhẹ DB)
+    attachments_data = [att.url for att in msg.attachments]
+
+    cm_data = {
+        "guild_id": ctx.guild.id,
         "content": msg.content,
-        "embeds": msg.embeds,
-        "attachments": msg.attachments
+        "embeds": embeds_data,
+        "attachments": attachments_data
     }
 
-    await ctx.send("✅ Đã lưu tin nhắn làm CM.")
+    # Upsert (có thì update, không thì tạo mới)
+    cm_col.update_one(
+        {"guild_id": ctx.guild.id},
+        {"$set": cm_data},
+        upsert=True
+    )
+
+    await ctx.send("✅ Đã lưu CM vào database.")
 
 @bot.command(name="cm")
 async def cm(ctx):
-    global saved_cm_message
 
-    if not saved_cm_message:
-        await ctx.send("❌ Chưa có tin nhắn nào được lưu.")
+    data = cm_col.find_one({"guild_id": ctx.guild.id})
+
+    if not data:
+        await ctx.send("❌ Chưa có CM nào được lưu.")
         return
 
-    files = []
-
-    # Lấy lại file nếu có
-    for att in saved_cm_message["attachments"]:
-        file_bytes = await att.read()
-        files.append(discord.File(io.BytesIO(file_bytes), filename=att.filename))
+    # Khôi phục embed
+    embeds = [discord.Embed.from_dict(e) for e in data.get("embeds", [])]
 
     await ctx.send(
-        content=saved_cm_message["content"],
-        embeds=saved_cm_message["embeds"],
-        files=files if files else None
+        content=data.get("content", ""),
+        embeds=embeds
     )
+
+    # Gửi lại attachment nếu có
+    for url in data.get("attachments", []):
+        await ctx.send(url)
+
+@commands.command(name="chichdien")
+async def chichdien(self, ctx, target: discord.Member):
+    attacker = ctx.author
+
+    # Lấy tên (KHÔNG ping)
+    attacker_name = attacker.display_name
+    target_name = target.display_name
+
+    await ctx.send(f"⚡ {target_name} đã bị chích điện bởi {attacker_name}!")
+    await ctx.send(f"<a:chichdien:1484587399748128798>")
+
 
 import random
 import asyncio
