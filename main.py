@@ -21,6 +21,7 @@ from boss_system import BossSystem
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.presences = True  # 👈 THÊM DÒNG NÀY
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 last_message_time = {}  # {user_id: datetime}
@@ -28,7 +29,61 @@ last_message_time = {}  # {user_id: datetime}
 LEFT_REGEX = re.compile(r"User\s+<?@?(\d+)>?\s+left", re.IGNORECASE)
 ID_REGEX = re.compile(r"\b(\d{17,20})\b")
 
+tracked_users = set()  # lưu user_id cần theo dõi
+#notify_channel_id = 123456789012345678  # channel bot sẽ báo
+OWNER_ID = 872024401095294986  # 👈 ID Discord của bạn
 saved_cm_message = None
+
+@bot.command(name="track")
+async def track_user(ctx, member: discord.Member):
+    tracked_users.add(member.id)
+    await ctx.send(f"👀 Đang theo dõi {member.mention}")
+
+@bot.command(name="untrack")
+async def untrack_user(ctx, member: discord.Member):
+    tracked_users.discard(member.id)
+    await ctx.send(f"❌ Đã bỏ theo dõi {member.mention}")
+
+@bot.event
+async def on_presence_update(before: discord.Member, after: discord.Member):
+
+    if after.id not in tracked_users:
+        return
+
+    if before.status == after.status:
+        return
+
+    # Lấy user (bạn)
+    owner = bot.get_user(OWNER_ID)
+
+    if owner is None:
+        try:
+            owner = await bot.fetch_user(OWNER_ID)
+        except:
+            return
+
+    # Tạo nội dung message
+    if after.status == discord.Status.online:
+        msg = f"🟢 {after} vừa ONLINE"
+
+    elif after.status == discord.Status.offline:
+        msg = f"⚫ {after} vừa OFFLINE"
+
+    elif after.status == discord.Status.idle:
+        msg = f"🌙 {after} đang IDLE"
+
+    elif after.status == discord.Status.dnd:
+        msg = f"⛔ {after} đang DO NOT DISTURB"
+    else:
+        return
+
+    # Gửi DM
+    try:
+        await owner.send(msg)
+    except:
+        print("❌ Không gửi được DM (có thể bạn tắt DM)")
+
+
 
 def remove_mentions(text: str) -> str:
     # User mention <@123> hoặc <@!123>
